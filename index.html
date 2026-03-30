@@ -26,6 +26,13 @@
             color: white;
             border-color: #2563eb;
         }
+        .action-btn {
+            opacity: 0.3;
+            transition: opacity 0.2s;
+        }
+        tr:hover .action-btn {
+            opacity: 1;
+        }
     </style>
 </head>
 <body class="bg-slate-50 min-h-screen p-4 md:p-8">
@@ -34,7 +41,7 @@
         <header class="bg-white p-6 rounded-2xl shadow-md border border-slate-200 flex flex-col md:flex-row justify-between items-center">
             <div>
                 <h1 class="text-2xl font-bold text-slate-800">旅遊記帳本</h1>
-                <p class="text-slate-500 text-sm">自動同步至 Google 試算表</p>
+                <p class="text-slate-500 text-sm">自動同步至 Google 試算表 (預設日圓)</p>
             </div>
             <div id="exchange-rate-box" class="mt-4 md:mt-0 p-4 bg-orange-50 rounded-xl border border-orange-100 text-center md:text-right">
                 <p class="text-xs text-orange-500 font-semibold uppercase tracking-wider">即時匯率更新</p>
@@ -63,6 +70,7 @@
                 <div>
                     <label class="block text-sm font-medium text-slate-600 mb-1">結帳幣別</label>
                     <div class="flex bg-slate-100 p-1 rounded-lg border border-slate-200">
+                        <!-- 預設啟動日圓按鈕樣式 -->
                         <button type="button" onclick="setCurrency('JPY')" id="btn-JPY" class="currency-btn active flex-1 py-1 text-sm font-bold rounded-md border border-transparent transition-all">JPY</button>
                         <button type="button" onclick="setCurrency('TWD')" id="btn-TWD" class="currency-btn flex-1 py-1 text-sm font-bold rounded-md border border-transparent transition-all text-slate-500">TWD</button>
                     </div>
@@ -104,7 +112,7 @@
                 </div>
             </div>
             <div id="filter-summary" class="mt-4 p-3 bg-slate-50 rounded-lg text-sm text-slate-600 hidden">
-                搜尋範圍內總支出：<span id="total-filtered-twd" class="font-bold text-blue-600 text-lg">0</span> TWD
+                <span id="summary-text">搜尋範圍內總支出：</span><span id="total-filtered-twd" class="font-bold text-blue-600 text-lg">0</span> TWD
             </div>
         </section>
 
@@ -112,7 +120,7 @@
         <section class="bg-white rounded-2xl shadow-md border border-slate-200 overflow-hidden">
             <div class="p-6 border-b border-slate-100 flex justify-between items-center bg-white sticky top-0 z-10">
                 <h2 class="text-lg font-semibold text-slate-700 flex items-center">
-                    <span class="mr-2">📊</span> 歷史紀錄
+                    <span class="mr-2">📊</span> 歷史紀錄 <span id="list-type-hint" class="ml-2 text-xs font-normal text-slate-400">(最近 20 筆)</span>
                 </h2>
                 <div class="flex gap-2">
                     <button onclick="clearFilter()" class="px-3 py-1 text-slate-400 hover:text-slate-600 text-xs font-bold transition">
@@ -127,10 +135,11 @@
                 <table class="w-full text-left border-collapse" id="records-table">
                     <thead>
                         <tr class="bg-slate-50 text-slate-500 text-xs uppercase tracking-wider">
-                            <th class="p-4 border-b font-semibold">日期</th>
+                            <th class="p-4 border-b font-semibold">日期時間</th>
                             <th class="p-4 border-b font-semibold">項目</th>
                             <th class="p-4 border-b font-semibold text-right">原始金額</th>
                             <th class="p-4 border-b font-semibold text-right">台幣等值</th>
+                            <th class="p-4 border-b font-semibold text-center">操作</th>
                         </tr>
                     </thead>
                     <tbody id="data-body" class="divide-y divide-slate-100">
@@ -149,8 +158,8 @@
         const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyARg5ZDoUF4zQSX9nBVcytl4z8h83CP8hfrPHf70vusnLKCqcaNqagd-smTsiNL9ZP/exec'; 
         
         let jpyToTwdRate = 0; 
-        let rawData = []; // 儲存從伺服器抓取的原始資料
-        let filteredData = []; // 儲存篩選後的資料
+        let rawData = []; 
+        let filteredData = []; 
 
         async function updateExchangeRate() {
             try {
@@ -193,20 +202,28 @@
             try {
                 const response = await fetch(SCRIPT_URL);
                 const data = await response.json();
-                // 格式化資料為物件方便操作
-                rawData = data.map(row => ({
-                    date: row[0],
+                rawData = data.map((row, index) => ({
+                    id: index,
+                    dateString: row[0],
                     item: row[1],
                     amount: row[2],
                     currency: row[3],
                     twdAmount: row[4]
                 }));
-                applyFilter(); // 抓取後直接套用篩選（預設全顯）
+                applyFilter();
             } catch (error) {
-                document.getElementById('data-body').innerHTML = '<tr><td colspan="4" class="text-center p-12 text-red-500">讀取失敗</td></tr>';
+                document.getElementById('data-body').innerHTML = '<tr><td colspan="5" class="text-center p-12 text-red-500">讀取失敗</td></tr>';
             } finally {
                 loader.classList.add('hidden');
             }
+        }
+
+        function formatDisplayDate(dateStr) {
+            const d = new Date(dateStr);
+            if (isNaN(d.getTime())) return dateStr;
+            const ymd = d.toLocaleDateString();
+            const hms = d.toTimeString().split(' ')[0]; 
+            return `<div class="text-slate-800">${ymd}</div><div class="text-[10px] text-slate-400 font-mono">${hms}</div>`;
         }
 
         function renderTable(dataToRender) {
@@ -214,43 +231,84 @@
             tbody.innerHTML = '';
             
             if (dataToRender.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="4" class="text-center p-12 text-slate-400">沒有符合條件的紀錄</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="5" class="text-center p-12 text-slate-400">沒有符合條件的紀錄</td></tr>';
                 return;
             }
 
             let totalTwd = 0;
-            [...dataToRender].reverse().forEach(row => {
+            dataToRender.forEach(row => {
                 totalTwd += Number(row.twdAmount);
                 const tr = document.createElement('tr');
-                tr.className = "hover:bg-blue-50 transition-colors";
+                tr.className = "hover:bg-blue-50 transition-colors border-b border-slate-50";
                 tr.innerHTML = `
-                    <td class="p-4 text-sm text-slate-600">${new Date(row.date).toLocaleDateString()}</td>
+                    <td class="p-4 text-xs">${formatDisplayDate(row.dateString)}</td>
                     <td class="p-4 text-sm font-bold text-slate-800">${row.item}</td>
                     <td class="p-4 text-sm text-right font-mono text-slate-600">${row.amount} <span class="text-xs text-slate-400">${row.currency}</span></td>
                     <td class="p-4 text-sm text-right font-bold font-mono text-blue-600">${row.twdAmount} TWD</td>
+                    <td class="p-4 text-center">
+                        <div class="flex justify-center gap-2">
+                            <button onclick='deleteRecord(${JSON.stringify(row)})' class="action-btn text-red-400 hover:text-red-600" title="刪除">🗑️</button>
+                        </div>
+                    </td>
                 `;
                 tbody.appendChild(tr);
             });
-
-            // 更新篩選摘要
             document.getElementById('total-filtered-twd').innerText = Math.round(totalTwd).toLocaleString();
+        }
+
+        async function deleteRecord(row) {
+            if (!confirm(`確定要刪除「${row.item}」這筆紀錄嗎？`)) return;
+            const btn = event.currentTarget;
+            btn.innerText = "⏳";
+            btn.disabled = true;
+
+            try {
+                await fetch(SCRIPT_URL, {
+                    method: 'POST',
+                    mode: 'no-cors',
+                    cache: 'no-cache',
+                    body: JSON.stringify({
+                        action: 'DELETE',
+                        date: row.dateString,
+                        item: row.item,
+                        amount: row.amount
+                    })
+                });
+                rawData = rawData.filter(r => !(r.dateString === row.dateString && r.item === row.item && r.amount === row.amount));
+                applyFilter();
+                setTimeout(fetchData, 1500);
+            } catch (error) {
+                alert('刪除失敗');
+                btn.innerText = "🗑️";
+                btn.disabled = false;
+            }
         }
 
         function applyFilter() {
             const start = document.getElementById('filter-start').value;
             const end = document.getElementById('filter-end').value;
             const summary = document.getElementById('filter-summary');
+            const summaryText = document.getElementById('summary-text');
+            const hint = document.getElementById('list-type-hint');
 
-            filteredData = rawData.filter(row => {
-                const rowDate = new Date(row.date).getTime();
-                const startTime = start ? new Date(start).getTime() : 0;
-                const endTime = end ? new Date(end).setHours(23,59,59,999) : Infinity;
-                return rowDate >= startTime && rowDate <= endTime;
-            });
+            let sortedRaw = [...rawData].sort((a, b) => new Date(b.dateString) - new Date(a.dateString));
 
-            if (start || end) summary.classList.remove('hidden');
-            else summary.classList.add('hidden');
-
+            if (!start && !end) {
+                filteredData = sortedRaw.slice(0, 20);
+                summary.classList.remove('hidden');
+                summaryText.innerText = "最近 20 筆支出總計：";
+                hint.innerText = "(最近 20 筆)";
+            } else {
+                filteredData = sortedRaw.filter(row => {
+                    const rowDate = new Date(row.dateString).getTime();
+                    const startTime = start ? new Date(start).getTime() : 0;
+                    const endTime = end ? new Date(end).setHours(23,59,59,999) : Infinity;
+                    return rowDate >= startTime && rowDate <= endTime;
+                });
+                summary.classList.remove('hidden');
+                summaryText.innerText = "搜尋範圍內總支出：";
+                hint.innerText = "(搜尋結果)";
+            }
             renderTable(filteredData);
         }
 
@@ -265,23 +323,24 @@
                 alert('目前沒有資料可供匯出');
                 return;
             }
-
-            // 準備 Excel 資料欄位
-            const excelData = filteredData.map(row => ({
-                '日期': new Date(row.date).toLocaleDateString(),
-                '消費項目': row.item,
-                '原始金額': row.amount,
-                '幣別': row.currency,
-                '台幣等值': row.twdAmount
-            }));
-
+            let totalTwdSum = 0;
+            const excelData = filteredData.map(row => {
+                totalTwdSum += Number(row.twdAmount);
+                const d = new Date(row.dateString);
+                return {
+                    '日期時間': d.toLocaleString(),
+                    '消費項目': row.item,
+                    '原始金額': row.amount,
+                    '幣別': row.currency,
+                    '台幣等值': row.twdAmount
+                };
+            });
+            excelData.push({});
+            excelData.push({ '日期時間': '總計', '消費項目': `共 ${filteredData.length} 筆資料`, '台幣等值': Math.round(totalTwdSum) });
             const worksheet = XLSX.utils.json_to_sheet(excelData);
             const workbook = XLSX.utils.book_new();
             XLSX.utils.book_append_sheet(workbook, worksheet, "消費紀錄");
-
-            // 下載檔案
-            const fileName = `旅遊記帳_${new Date().toISOString().split('T')[0]}.xlsx`;
-            XLSX.writeFile(workbook, fileName);
+            XLSX.writeFile(workbook, `旅遊記帳_${new Date().toISOString().split('T')[0]}.xlsx`);
         }
 
         document.getElementById('record-form').onsubmit = async (e) => {
@@ -290,9 +349,17 @@
             const amount = parseFloat(document.getElementById('amount').value);
             const currency = document.getElementById('currency').value;
             const twdAmount = (currency === 'JPY') ? Math.round(amount * jpyToTwdRate) : amount;
+            
+            const inputDateStr = document.getElementById('date').value; 
+            const now = new Date();
+            const hours = String(now.getHours()).padStart(2, '0');
+            const minutes = String(now.getMinutes()).padStart(2, '0');
+            const seconds = String(now.getSeconds()).padStart(2, '0');
+            const fullDateTime = `${inputDateStr} ${hours}:${minutes}:${seconds}`;
 
             const payload = {
-                date: document.getElementById('date').value,
+                action: 'ADD',
+                date: fullDateTime,
                 item: document.getElementById('item').value,
                 amount: amount,
                 currency: currency,
@@ -306,15 +373,13 @@
                 await fetch(SCRIPT_URL, {
                     method: 'POST',
                     mode: 'no-cors',
-                    cache: 'no-cache',
-                    headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(payload)
                 });
-                
                 setTimeout(() => {
                     document.getElementById('record-form').reset();
                     document.getElementById('date').valueAsDate = new Date();
-                    setCurrency('JPY');
+                    // 關鍵：重設後再次強制預設為 JPY
+                    setCurrency('JPY'); 
                     calculatePreview();
                     fetchData();
                     btn.disabled = false;
@@ -330,6 +395,8 @@
         window.onload = async () => {
             document.getElementById('date').valueAsDate = new Date();
             await updateExchangeRate();
+            // 關鍵：頁面載入後預設選取 JPY
+            setCurrency('JPY'); 
             fetchData();
         };
     </script>
