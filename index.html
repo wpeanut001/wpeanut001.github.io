@@ -145,6 +145,16 @@ window.onload = ()=>{
   date.valueAsDate = new Date();
   load();
 };
+setInterval(async () => {
+  const res = await fetch(SCRIPT_URL);
+  const newData = await res.json();
+
+  // 如果資料數量不同才更新（避免重畫）
+  if (newData.length !== dataList.length) {
+    dataList = newData;
+    render();
+  }
+}, 5000);
 </script>
 
 </body>
