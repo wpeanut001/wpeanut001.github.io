@@ -237,11 +237,8 @@
             
             let finalTimestamp;
             if (selectedDate === todayStr) {
-                // 如果是今天，保留精確時間戳
                 finalTimestamp = new Date().toISOString();
             } else {
-                // 如果是過去日期，強制設定為該日 21:00 (台北時間)
-                // 這樣 GAS 接收到的 date 參數就會是晚上九點
                 finalTimestamp = new Date(`${selectedDate}T21:00:00+08:00`).toISOString();
             }
 
@@ -253,11 +250,9 @@
                 optimistic: true
             };
 
-            // 先更新本地 UI
             fullData.unshift(optimisticItem);
             fullData.sort((a, b) => new Date(b.date) - new Date(a.date));
             
-            // 自動切換篩選器到該日期
             document.getElementById('startDate').value = selectedDate;
             document.getElementById('endDate').value = selectedDate;
 
@@ -267,7 +262,6 @@
             document.getElementById('item').focus();
 
             try {
-                // 將 date 參數傳送至 GAS
                 await fetch(SCRIPT_URL, {
                     method: 'POST',
                     mode: 'no-cors',
@@ -281,7 +275,6 @@
                         id: optimisticId
                     })
                 });
-                // 延遲刷新以確保雲端已寫入
                 setTimeout(() => {
                     submitBtn.disabled = false;
                     btnText.innerText = '確認儲存';
@@ -320,12 +313,19 @@
             const startVal = document.getElementById('startDate').value;
             const endVal = document.getElementById('endDate').value;
             
+            // 修正篩選邏輯：結束時間設定為該日的隔日 00:00:00
             const startTime = startVal ? new Date(startVal + 'T00:00:00+08:00').getTime() : 0;
-            const endTime = endVal ? new Date(endVal + 'T23:59:59+08:00').getTime() : Infinity;
+            let endTime = Infinity;
+            if (endVal) {
+                const endD = new Date(endVal + 'T00:00:00+08:00');
+                endD.setDate(endD.getDate() + 1); // 設為下一天凌晨
+                endTime = endD.getTime();
+            }
 
             let filteredItems = items.filter(i => {
                 const t = new Date(i.date).getTime();
-                return t >= startTime && t <= endTime;
+                // 使用小於 endTime (隔日凌晨) 來包含當天所有秒數
+                return t >= startTime && t < endTime;
             });
 
             const totalSum = filteredItems.reduce((sum, i) => sum + (Number(i.twd) || 0), 0);
