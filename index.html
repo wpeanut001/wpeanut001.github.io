@@ -2,266 +2,218 @@
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>個人雲端記帳本</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>個人雲端記帳本 (極速版)</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        body { background-color: #f3f4f6; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
-        .card { background: white; border-radius: 1rem; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); }
-        .loading { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(255,255,255,0.8); z-index: 100; justify-content: center; align-items: center; }
-        input:focus, select:focus { outline: 2px solid #3b82f6; outline-offset: -1px; }
+        body { 
+            background-color: #f8fafc; 
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            -webkit-tap-highlight-color: transparent;
+        }
+        .card { background: white; border-radius: 16px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); }
+        .btn-primary { 
+            background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+            color: white; 
+            transition: transform 0.1s active; 
+        }
+        .btn-primary:active { transform: scale(0.96); }
+        input, select { font-size: 16px !important; } /* 防止 iOS 自動放大 */
+        .loading-dots:after { content: ' .'; animation: dots 1.5s steps(5, end) infinite; }
+        @keyframes dots { 0%, 20% { content: ''; } 40% { content: '.'; } 60% { content: '..'; } 80% { content: '...'; } }
     </style>
 </head>
-<body class="p-4 md:p-8">
+<body class="p-4 md:max-w-xl mx-auto pb-20">
 
-    <!-- 載入中動畫 -->
-    <div id="loading" class="loading">
-        <div class="flex flex-col items-center">
-            <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
-            <p class="mt-4 text-gray-600 font-medium">處理中，請稍候...</p>
+    <!-- 快速輸入區 -->
+    <div class="card p-6 mb-6">
+        <h1 class="text-xl font-bold mb-6 text-gray-800 flex items-center">
+            <span class="mr-2">💰</span> 快速記帳
+        </h1>
+        
+        <div class="space-y-5">
+            <div class="grid grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider">消費日期</label>
+                    <input type="date" id="date" class="mt-1 block w-full border-gray-200 rounded-lg bg-gray-50 p-3 border focus:ring-2 focus:ring-indigo-500 outline-none">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider">幣別</label>
+                    <select id="currency" class="mt-1 block w-full border-gray-200 rounded-lg bg-gray-50 p-3 border focus:ring-2 focus:ring-indigo-500 outline-none">
+                        <option value="JPY">JPY (日幣)</option>
+                        <option value="TWD">TWD (台幣)</option>
+                    </select>
+                </div>
+            </div>
+
+            <div>
+                <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider">消費項目</label>
+                <input type="text" id="item" placeholder="去哪裡花了什麼？" class="mt-1 block w-full border-gray-200 rounded-lg bg-gray-50 p-3 border focus:ring-2 focus:ring-indigo-500 outline-none">
+            </div>
+
+            <div>
+                <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider">金額</label>
+                <input type="number" id="amount" inputmode="decimal" placeholder="0.00" class="mt-1 block w-full border-gray-200 rounded-lg bg-gray-50 p-3 border focus:ring-2 focus:ring-indigo-500 outline-none text-lg font-medium">
+            </div>
+
+            <button onclick="submitData()" id="submitBtn" class="w-full btn-primary py-4 rounded-xl font-bold text-lg shadow-lg">
+                確認送出
+            </button>
         </div>
     </div>
 
-    <div class="max-w-2xl mx-auto">
-        <h1 class="text-2xl font-bold text-gray-800 mb-6 flex items-center justify-between">
-            <div class="flex items-center">
-                <span class="mr-2">💰</span> 雲端記帳助手
-            </div>
-            <span id="onlineStatus" class="text-xs bg-green-100 text-green-600 px-2 py-1 rounded-full">連線正常</span>
-        </h1>
-
-        <!-- 輸入表單 -->
-        <div class="card p-6 mb-8">
-            <div class="grid grid-cols-1 gap-4">
-                <div>
-                    <label class="block text-sm font-medium text-gray-700">消費日期 (補登自動設為 21:00)</label>
-                    <input type="date" id="inputDate" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm p-2 bg-gray-50 border">
-                </div>
-                <div>
-                    <label class="block text-sm font-medium text-gray-700">輸入項目</label>
-                    <input type="text" id="inputItem" placeholder="例如：拉麵、藥妝" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm p-2 bg-gray-50 border">
-                </div>
-                <div class="flex gap-4">
-                    <div class="flex-1">
-                        <label class="block text-sm font-medium text-gray-700">金額</label>
-                        <input type="number" id="inputAmount" step="any" placeholder="0" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm p-2 bg-gray-50 border">
-                    </div>
-                    <div class="w-32">
-                        <label class="block text-sm font-medium text-gray-700">幣別</label>
-                        <select id="inputCurrency" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm p-2 bg-gray-50 border">
-                            <option value="JPY" selected>JPY</option>
-                            <option value="TWD">TWD</option>
-                        </select>
-                    </div>
-                </div>
-                <p id="rateNotice" class="text-xs text-gray-400 italic">※ JPY 將自動參考消費日前一天匯率轉換為 TWD</p>
-                <button onclick="submitRecord()" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg transition duration-200 shadow-lg active:transform active:scale-95">
-                    送出記帳
-                </button>
-            </div>
+    <!-- 歷史紀錄標題與篩選 -->
+    <div class="flex justify-between items-center mb-4 px-2">
+        <h2 class="font-bold text-gray-700">消費紀錄</h2>
+        <div class="flex space-x-2">
+            <input type="date" id="filterStart" class="text-xs border rounded p-1">
+            <input type="date" id="filterEnd" class="text-xs border rounded p-1">
+            <button onclick="loadData()" class="text-xs bg-indigo-100 text-indigo-700 px-2 py-1 rounded">篩選</button>
         </div>
+    </div>
 
-        <!-- 篩選器 -->
-        <div class="flex flex-wrap gap-2 mb-4 items-end bg-white p-3 rounded-lg shadow-sm border border-gray-100">
-            <div class="flex-1 min-w-[140px]">
-                <label class="text-xs font-bold text-gray-400 uppercase">開始日期</label>
-                <input type="date" id="filterStart" class="block w-full text-sm border-gray-200 rounded-md p-1.5 border focus:border-blue-300">
-            </div>
-            <div class="flex-1 min-w-[140px]">
-                <label class="text-xs font-bold text-gray-400 uppercase">結束日期</label>
-                <input type="date" id="filterEnd" class="block w-full text-sm border-gray-200 rounded-md p-1.5 border focus:border-blue-300">
-            </div>
-            <button onclick="renderTable()" class="bg-gray-800 text-white px-5 py-2 rounded-md text-sm font-medium hover:bg-black transition">篩選</button>
-        </div>
-
-        <!-- 消費紀錄列表 -->
-        <div class="card overflow-hidden">
-            <div class="p-4 border-b bg-gray-50 flex justify-between items-center">
-                <h2 class="font-bold text-gray-700">消費紀錄 <span id="recordCount" class="text-xs font-normal text-gray-400 ml-2"></span></h2>
-                <button onclick="fetchData()" class="text-blue-600 text-sm flex items-center">
-                    <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
-                    重整
-                </button>
-            </div>
-            <div class="overflow-x-auto">
-                <table class="w-full text-left border-collapse">
-                    <thead class="bg-gray-100 text-xs uppercase text-gray-500 font-bold">
-                        <tr>
-                            <th class="p-4">日期</th>
-                            <th class="p-4">項目</th>
-                            <th class="p-4 text-right">原始金額</th>
-                            <th class="p-4 text-right text-blue-600">TWD</th>
-                            <th class="p-4 text-center">操作</th>
-                        </tr>
-                    </thead>
-                    <tbody id="recordTable" class="text-sm divide-y divide-gray-100">
-                        <!-- 資料由 JS 生成 -->
-                    </tbody>
-                </table>
-            </div>
-        </div>
+    <!-- 列表展示區 -->
+    <div id="recordContainer" class="space-y-3">
+        <div class="text-center text-gray-400 py-10">讀取資料中<span class="loading-dots"></span></div>
     </div>
 
     <script>
-        // 重要：請在此處填寫您的 Google Apps Script 部署網址
-        const GAS_URL = "https://script.google.com/macros/s/AKfycbyARg5ZDoUF4zQSX9nBVcytl4z8h83CP8hfrPHf70vusnLKCqcaNqagd-smTsiNL9ZP/exec"; 
-        
-        let allRecords = [];
+        // 重要：請務必替換為您部署後的 GAS URL
+        const GAS_URL = "https://script.google.com/macros/s/AKfycbyARg5ZDoUF4zQSX9nBVcytl4z8h83CP8hfrPHf70vusnLKCqcaNqagd-smTsiNL9ZP/exec";
 
-        // 初始化
-        window.onload = () => {
-            const today = new Date().toISOString().split('T')[0];
-            document.getElementById('inputDate').value = today;
-            
-            // 預設篩選範圍：本月 1 號到今天
-            const firstDay = today.substring(0, 8) + '01';
-            document.getElementById('filterStart').value = firstDay;
-            document.getElementById('filterEnd').value = today;
-            
-            fetchData();
-        };
+        // 初始化日期
+        document.getElementById('date').valueAsDate = new Date();
+        const now = new Date();
+        document.getElementById('filterStart').valueAsDate = new Date(now.getFullYear(), now.getMonth(), 1);
+        document.getElementById('filterEnd').valueAsDate = now;
 
-        function showLoading(show) {
-            document.getElementById('loading').style.display = show ? 'flex' : 'none';
-        }
+        /**
+         * 送出資料到 GAS
+         */
+        async function submitData() {
+            const btn = document.getElementById('submitBtn');
+            const item = document.getElementById('item').value.trim();
+            const amount = document.getElementById('amount').value;
+            const date = document.getElementById('date').value;
+            const currency = document.getElementById('currency').value;
 
-        // 串接 GAS 取得資料
-        async function fetchData() {
-            if (!GAS_URL || GAS_URL.includes("您的GAS")) {
-                console.warn("尚未配置 GAS URL");
+            if (!item || !amount) {
+                alert("請填寫項目與金額");
                 return;
             }
-            showLoading(true);
+
+            // 進入讀取狀態
+            const originalBtnText = btn.innerText;
+            btn.disabled = true;
+            btn.innerText = "儲存中...";
+
+            try {
+                // 使用 POST 呼叫 GAS
+                await fetch(GAS_URL, {
+                    method: 'POST',
+                    mode: 'no-cors', // 配合 GAS 的 no-cors 模式
+                    body: JSON.stringify({
+                        action: 'add',
+                        date: date,
+                        item: item,
+                        currency: currency,
+                        amount: amount
+                    })
+                });
+
+                // 成功後立即反應：清空輸入框並刷新清單
+                document.getElementById('item').value = '';
+                document.getElementById('amount').value = '';
+                
+                // 為了速度，我們可以不等待 API 回傳，直接先在前端重新載入
+                loadData();
+                
+            } catch (error) {
+                alert("連線失敗，請檢查網路");
+            } finally {
+                btn.disabled = false;
+                btn.innerText = originalBtnText;
+            }
+        }
+
+        /**
+         * 從 GAS 抓取資料並顯示
+         */
+        async function loadData() {
+            const container = document.getElementById('recordContainer');
+            const start = document.getElementById('filterStart').value;
+            const end = document.getElementById('filterEnd').value;
+
             try {
                 const response = await fetch(GAS_URL, {
                     method: 'POST',
                     body: JSON.stringify({ action: 'getData' })
                 });
-                allRecords = await response.json();
-                renderTable();
+                const data = await response.json();
+
+                if (!data || data.length === 0) {
+                    container.innerHTML = '<div class="text-center text-gray-400 py-10">尚無紀錄</div>';
+                    return;
+                }
+
+                const filtered = data.filter(row => {
+                    const rowDate = row['日期'].split(' ')[0];
+                    return rowDate >= start && rowDate <= end;
+                }).sort((a,b) => new Date(b['日期']) - new Date(a['日期']));
+
+                renderList(filtered);
+
             } catch (e) {
-                console.error("獲取資料失敗", e);
-                document.getElementById('onlineStatus').innerText = "連線失敗";
-                document.getElementById('onlineStatus').className = "text-xs bg-red-100 text-red-600 px-2 py-1 rounded-full";
-            }
-            showLoading(false);
-        }
-
-        // 渲染表格內容
-        function renderTable() {
-            const start = document.getElementById('filterStart').value;
-            const end = document.getElementById('filterEnd').value;
-            const tbody = document.getElementById('recordTable');
-            tbody.innerHTML = '';
-
-            // 篩選與排序（依時間降序）
-            const filtered = allRecords.filter(r => {
-                const rDate = r.日期.split(' ')[0]; // 取得 yyyy-MM-dd 部分
-                return rDate >= start && rDate <= end;
-            }).sort((a, b) => new Date(b.日期) - new Date(a.日期));
-
-            document.getElementById('recordCount').innerText = `(共 ${filtered.length} 筆)`;
-
-            filtered.forEach(r => {
-                const tr = document.createElement('tr');
-                tr.className = "hover:bg-blue-50 transition-colors";
-                
-                // 格式化日期與時間
-                const dateParts = r.日期.split(' ');
-                const dateStr = dateParts[0];
-                const timeStr = dateParts[1] ? dateParts[1].substring(0, 5) : "";
-
-                tr.innerHTML = `
-                    <td class="p-4 whitespace-nowrap text-gray-500">
-                        <div class="font-medium text-gray-900">${dateStr}</div>
-                        <div class="text-[10px]">${timeStr}</div>
-                    </td>
-                    <td class="p-4 font-medium text-gray-800">${r.項目}</td>
-                    <td class="p-4 text-right">
-                        <span class="text-gray-900 font-mono">${Number(r.金額).toLocaleString()}</span>
-                        <span class="text-[10px] text-gray-400 ml-1 font-bold">${r.幣別}</span>
-                    </td>
-                    <td class="p-4 text-right text-blue-600 font-bold font-mono">
-                        ${Math.round(r.TWD).toLocaleString()}
-                    </td>
-                    <td class="p-4 text-center">
-                        <button onclick="deleteRecord('${r.ID}')" class="p-2 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-full transition">
-                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
-                        </button>
-                    </td>
-                `;
-                tbody.appendChild(tr);
-            });
-
-            if (filtered.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="5" class="p-12 text-center text-gray-400 italic">選定日期範圍內無紀錄</td></tr>';
+                container.innerHTML = '<div class="text-center text-red-400 py-10">資料讀取失敗</div>';
             }
         }
 
-        // 送出紀錄
-        async function submitRecord() {
-            const date = document.getElementById('inputDate').value;
-            const item = document.getElementById('inputItem').value;
-            const amountInput = document.getElementById('inputAmount').value;
-            const currency = document.getElementById('inputCurrency').value;
-
-            if (!item || !amountInput) {
-                alert("請填寫完整的項目與金額");
-                return;
-            }
-
-            const amount = parseFloat(amountInput);
-
-            showLoading(true);
-            try {
-                // 使用 fetch POST 傳送 JSON 到 GAS
-                // 注意：GAS Web App 需要透過此方式處理 CORS
-                await fetch(GAS_URL, {
-                    method: 'POST',
-                    mode: 'no-cors', 
-                    cache: 'no-cache',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        action: 'addData',
-                        data: { date, item, amount, currency }
-                    })
-                });
-                
-                // 因為 no-cors 無法讀取 Response，我們手動清空並延遲重新抓取
-                document.getElementById('inputItem').value = '';
-                document.getElementById('inputAmount').value = '';
-                
-                // 延遲 1.5 秒讓 GAS 完成 GoogleFinance 匯率計算與寫入
-                setTimeout(async () => {
-                    await fetchData();
-                }, 1500);
-                
-            } catch (e) {
-                console.error("提交失敗", e);
-                alert("提交過程發生錯誤，請檢查網路連線");
-                showLoading(false);
-            }
+        /**
+         * 渲染 HTML 清單
+         */
+        function renderList(items) {
+            const container = document.getElementById('recordContainer');
+            container.innerHTML = items.map(item => `
+                <div class="card p-4 flex justify-between items-center animate-fade-in border-l-4 ${item['幣別'] === 'JPY' ? 'border-red-400' : 'border-emerald-400'}">
+                    <div class="flex-1">
+                        <div class="flex items-center space-x-2">
+                            <span class="text-[10px] bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded">${item['日期'].split(' ')[0]}</span>
+                            <span class="font-bold text-gray-800">${item['項目']}</span>
+                        </div>
+                        <div class="mt-1 flex items-baseline space-x-2">
+                            <span class="text-lg font-semibold text-gray-900">${item['金額']} <small class="text-xs">${item['幣別']}</small></span>
+                            ${item['幣別'] === 'JPY' ? `<span class="text-xs text-gray-400">≈ NT$ ${item['TWD']}</span>` : ''}
+                        </div>
+                    </div>
+                    <button onclick="deleteRecord('${item['ID']}')" class="ml-4 p-2 text-gray-300 hover:text-red-500 transition-colors">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                        </svg>
+                    </button>
+                </div>
+            `).join('');
         }
 
-        // 刪除紀錄
+        /**
+         * 刪除紀錄
+         */
         async function deleteRecord(id) {
-            if (!confirm("確定要刪除這筆消費紀錄嗎？")) return;
+            if (!confirm("確定要刪除嗎？")) return;
             
-            showLoading(true);
             try {
                 await fetch(GAS_URL, {
                     method: 'POST',
                     mode: 'no-cors',
-                    body: JSON.stringify({ action: 'deleteData', id: id })
+                    body: JSON.stringify({ action: 'delete', id: id })
                 });
-                
-                // 延遲重整
-                setTimeout(fetchData, 1000);
+                loadData(); // 重新整理
             } catch (e) {
-                console.error("刪除失敗", e);
-                showLoading(false);
+                alert("刪除失敗");
             }
         }
+
+        // 初始讀取
+        window.onload = loadData;
     </script>
 </body>
 </html>
