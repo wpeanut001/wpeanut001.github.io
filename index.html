@@ -97,23 +97,6 @@
         document.getElementById('filterEnd').valueAsDate = now;
 
         /**
-         * 格式化本地日期時間為 ISO 格式 (保留時區資訊)
-         */
-        function getLocalISOString(date) {
-            const tzOffset = -date.getTimezoneOffset();
-            const diff = tzOffset >= 0 ? '+' : '-';
-            const pad = n => `${Math.floor(Math.abs(n))}`.padStart(2, '0');
-            return date.getFullYear() +
-                '-' + pad(date.getMonth() + 1) +
-                '-' + pad(date.getDate()) +
-                'T' + pad(date.getHours()) +
-                ':' + pad(date.getMinutes()) +
-                ':' + pad(date.getSeconds()) +
-                diff + pad(tzOffset / 60) +
-                ':' + pad(tzOffset % 60);
-        }
-
-        /**
          * 送出資料到 GAS
          */
         async function submitData() {
@@ -128,7 +111,7 @@
                 return;
             }
 
-            // --- 修正時間邏輯：處理本地時區 ---
+            // --- 智慧時間處理 ---
             let finalDate;
             const selectedDate = new Date(selectedDateStr);
             const today = new Date();
@@ -136,12 +119,12 @@
             const isToday = selectedDate.toDateString() === today.toDateString();
             
             if (isToday) {
-                // 如果是今天，使用「現在」的確切時間
-                finalDate = getLocalISOString(today);
+                // 如果是今天，直接傳送當下時間對象
+                finalDate = today.toString(); 
             } else {
-                // 如果是補登日期，設定為該日的 21:00
+                // 如果是補登，設定為該日 21:00
                 selectedDate.setHours(21, 0, 0, 0);
-                finalDate = getLocalISOString(selectedDate);
+                finalDate = selectedDate.toString();
             }
 
             const originalBtnText = btn.innerText;
@@ -149,12 +132,13 @@
             btn.innerText = "儲存中...";
 
             try {
+                // 為了極速，使用 no-cors POST
                 await fetch(GAS_URL, {
                     method: 'POST',
                     mode: 'no-cors',
                     body: JSON.stringify({
                         action: 'add',
-                        date: finalDate, // 傳送包含本地時區偏移的字串
+                        date: finalDate, 
                         item: item,
                         currency: currency,
                         amount: amount
@@ -164,7 +148,8 @@
                 document.getElementById('item').value = '';
                 document.getElementById('amount').value = '';
                 
-                await loadDataFromServer();
+                // 背景同步最新資料
+                loadDataFromServer();
                 
             } catch (error) {
                 alert("連線失敗，請檢查網路");
