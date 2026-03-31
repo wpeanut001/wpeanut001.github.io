@@ -3,18 +3,17 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>旅遊記帳本</title>
+<title>旅遊記帳本（升級版）</title>
 <script src="https://cdn.tailwindcss.com"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 </head>
 
 <body class="bg-slate-50 p-6">
 
 <div class="max-w-3xl mx-auto space-y-6">
 
-<h1 class="text-2xl font-bold">旅遊記帳本</h1>
+<h1 class="text-2xl font-bold">旅遊記帳本（快速版）</h1>
 
-<form id="record-form" class="grid grid-cols-2 gap-4">
+<form id="form" class="grid grid-cols-2 gap-4">
 <input type="date" id="date" required class="border p-2">
 <input type="text" id="item" placeholder="項目" required class="border p-2">
 <input type="number" id="amount" placeholder="金額" required class="border p-2">
@@ -27,101 +26,125 @@
 <button class="col-span-2 bg-blue-600 text-white p-2 rounded">新增</button>
 </form>
 
-<table class="w-full mt-6 border">
+<table class="w-full border mt-6">
 <thead>
 <tr>
-<th>日期</th>
+<th>時間</th>
 <th>項目</th>
 <th>金額</th>
 <th>TWD</th>
+<th>操作</th>
 </tr>
 </thead>
-<tbody id="data-body"></tbody>
+<tbody id="tbody"></tbody>
 </table>
 
 </div>
 
 <script>
-const SCRIPT_URL = '你的GAS網址';
+const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyARg5ZDoUF4zQSX9nBVcytl4z8h83CP8hfrPHf70vusnLKCqcaNqagd-smTsiNL9ZP/exec';
 
-let rawData = [];
+let dataList = [];
 
-/* ✅ 顯示時間統一格式 */
-function formatDisplayDate(dateStr) {
-    const d = new Date(dateStr);
-    if (isNaN(d.getTime())) return dateStr;
-
-    const y = d.getFullYear();
-    const m = String(d.getMonth() + 1).padStart(2, '0');
-    const day = String(d.getDate()).padStart(2, '0');
-
-    const h = String(d.getHours()).padStart(2, '0');
-    const min = String(d.getMinutes()).padStart(2, '0');
-    const s = String(d.getSeconds()).padStart(2, '0');
-
-    return `${y}-${m}-${day} ${h}:${min}:${s}`;
+/* 時間格式 */
+function formatDate(str){
+  const d = new Date(str);
+  const y = d.getFullYear();
+  const m = String(d.getMonth()+1).padStart(2,'0');
+  const day = String(d.getDate()).padStart(2,'0');
+  const h = String(d.getHours()).padStart(2,'0');
+  const min = String(d.getMinutes()).padStart(2,'0');
+  const s = String(d.getSeconds()).padStart(2,'0');
+  return `${y}-${m}-${day} ${h}:${min}:${s}`;
 }
 
-/* 讀資料 */
-async function fetchData() {
-    const res = await fetch(SCRIPT_URL);
-    const data = await res.json();
+/* 渲染 */
+function render(){
+  const tbody = document.getElementById('tbody');
+  tbody.innerHTML = '';
 
-    rawData = data;
+  dataList.forEach(row=>{
+    const tr = document.createElement('tr');
 
-    renderTable();
+    tr.innerHTML = `
+      <td>${formatDate(row.date)}</td>
+      <td>${row.item}</td>
+      <td>${row.amount} ${row.currency}</td>
+      <td>${row.twd}</td>
+      <td>
+        <button onclick="del('${row.id}')" class="text-red-500">刪除</button>
+      </td>
+    `;
+
+    tbody.appendChild(tr);
+  });
 }
 
-/* 顯示 */
-function renderTable() {
-    const tbody = document.getElementById('data-body');
-    tbody.innerHTML = '';
-
-    rawData.forEach(row => {
-        const tr = document.createElement('tr');
-
-        tr.innerHTML = `
-        <td>${formatDisplayDate(row[0])}</td>
-        <td>${row[1]}</td>
-        <td>${row[2]} ${row[3]}</td>
-        <td>${row[4]}</td>
-        `;
-
-        tbody.appendChild(tr);
-    });
+/* 讀資料（只做一次） */
+async function load(){
+  const res = await fetch(SCRIPT_URL);
+  dataList = await res.json();
+  render();
 }
 
-/* ✅ 送出資料（ISO格式） */
-document.getElementById('record-form').onsubmit = async (e) => {
-    e.preventDefault();
+/* 新增（不卡頓） */
+document.getElementById('form').onsubmit = async(e)=>{
+  e.preventDefault();
 
-    const date = document.getElementById('date').value;
-    const now = new Date();
+  const now = new Date();
+  const date = document.getElementById('date').value;
 
-    const isoString = new Date(
-        `${date}T${now.getHours()}:${now.getMinutes()}:${now.getSeconds()}`
-    ).toISOString();
+  const iso = new Date(
+    `${date}T${now.getHours()}:${now.getMinutes()}:${now.getSeconds()}`
+  ).toISOString();
 
-    const payload = {
-        action: 'ADD',
-        date: isoString,
-        item: document.getElementById('item').value,
-        amount: document.getElementById('amount').value,
-        currency: document.getElementById('currency').value
-    };
+  const payload = {
+    action:'ADD',
+    date: iso,
+    item: item.value,
+    amount: amount.value,
+    currency: currency.value
+  };
 
-    await fetch(SCRIPT_URL, {
-        method: 'POST',
-        mode: 'no-cors',
-        body: JSON.stringify(payload)
-    });
+  /* 先加到畫面（超順） */
+  const fake = {
+    id: 'temp_'+Date.now(),
+    date: iso,
+    item: payload.item,
+    amount: payload.amount,
+    currency: payload.currency,
+    twd: payload.amount
+  };
 
-    fetchData();
+  dataList.unshift(fake);
+  render();
+
+  await fetch(SCRIPT_URL,{
+    method:'POST',
+    mode:'no-cors',
+    body:JSON.stringify(payload)
+  });
 };
 
-window.onload = () => {
-    document.getElementById('date').valueAsDate = new Date();
-    fetchData();
+/* 刪除（不卡頓） */
+async function del(id){
+
+  dataList = dataList.filter(d=>d.id!==id);
+  render();
+
+  await fetch(SCRIPT_URL,{
+    method:'POST',
+    mode:'no-cors',
+    body:JSON.stringify({
+      action:'DELETE',
+      id:id
+    })
+  });
+}
+
+window.onload = ()=>{
+  date.valueAsDate = new Date();
+  load();
 };
 </script>
 
