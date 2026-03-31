@@ -172,9 +172,16 @@
         let fullData = JSON.parse(localStorage.getItem('travel_records_v3') || '[]');
         let jpyRate = parseFloat(localStorage.getItem('jpy_rate_v3') || '0.215');
 
-        function initDateFilters() {
+        // 取得台灣當前日期 YYYY-MM-DD
+        function getTaiwanToday() {
             const now = new Date();
-            const todayStr = now.toISOString().split('T')[0];
+            // 使用 toLocaleDateString 確保取得台灣時區的日期
+            const twDate = now.toLocaleDateString('zh-TW', { year: 'numeric', month: '2-digit', day: '2-digit', timeZone: 'Asia/Taipei' });
+            return twDate.replace(/\//g, '-');
+        }
+
+        function initDateFilters() {
+            const todayStr = getTaiwanToday();
             document.getElementById('inputDate').value = todayStr;
             document.getElementById('startDate').value = todayStr;
             document.getElementById('endDate').value = todayStr;
@@ -188,14 +195,12 @@
             const currentTWHour = now.getUTCHours() + tzOffset;
             
             // 決定「匯率基準日」
-            // 如果現在台灣時間還沒到 9 點，基準日就是昨天，否則就是今天
             let baseDate = new Date(now);
             if (currentTWHour < 9) {
                 baseDate.setDate(baseDate.getDate() - 1);
             }
-            const dateKey = baseDate.toISOString().split('T')[0]; // 例如 "2023-10-27"
+            const dateKey = baseDate.toLocaleDateString('zh-TW', { year: 'numeric', month: '2-digit', day: '2-digit', timeZone: 'Asia/Taipei' }).replace(/\//g, '-');
 
-            // 檢查快取中是否有該基準日的匯率
             const cachedDate = localStorage.getItem('jpy_rate_date_v3');
             if (cachedDate === dateKey && localStorage.getItem('jpy_rate_v3')) {
                 jpyRate = parseFloat(localStorage.getItem('jpy_rate_v3'));
@@ -203,15 +208,13 @@
                 return;
             }
 
-            // 若快取過期或不存在，則抓取最新匯率
             try {
-                // 注意：API 抓取的是當下最新匯率，我們將其視為該基準日的固定匯率
                 const res = await fetch("https://open.er-api.com/v6/latest/JPY");
                 const data = await res.json();
                 jpyRate = data.rates.TWD;
                 
                 localStorage.setItem('jpy_rate_v3', jpyRate);
-                localStorage.setItem('jpy_rate_date_v3', dateKey); // 儲存基準日標記
+                localStorage.setItem('jpy_rate_date_v3', dateKey);
                 updateRateUI(true, dateKey);
             } catch (e) { 
                 updateRateUI(false); 
@@ -252,13 +255,14 @@
             const twdEstimate = currency === 'JPY' ? Math.round(amount * jpyRate) : amount;
             
             const tempId = 'temp-' + Date.now();
+            const todayStr = getTaiwanToday();
             const optimisticItem = {
                 id: tempId, 
                 item, 
                 amount, 
                 currency, 
                 twd: twdEstimate,
-                date: (selectedDate === new Date().toISOString().split('T')[0]) ? new Date().toISOString() : new Date(selectedDate).toISOString(), 
+                date: (selectedDate === todayStr) ? new Date().toISOString() : new Date(selectedDate).toISOString(), 
                 optimistic: true
             };
 
@@ -266,6 +270,7 @@
             fullData.sort((a, b) => new Date(b.date) - new Date(a.date));
             
             document.getElementById('payForm').reset();
+            // 提交後強制恢復為今天
             initDateFilters(); 
             render(fullData);
             document.getElementById('item').focus();
@@ -312,6 +317,7 @@
                 if (Array.isArray(data)) {
                     fullData = data;
                     localStorage.setItem('travel_records_v3', JSON.stringify(fullData));
+                    // 每次資料同步完畢，若沒有特定選擇，應確保顯示邏輯跟隨篩選器
                     render(fullData);
                 }
             } catch (e) { 
