@@ -67,12 +67,24 @@
     </div>
 
     <!-- 歷史紀錄標題與篩選 -->
-    <div class="flex flex-wrap justify-between items-center mb-4 px-2 gap-2">
-        <h2 class="font-bold text-gray-700">消費紀錄</h2>
+    <div class="flex flex-wrap justify-between items-center mb-2 px-2 gap-2">
+        <h2 class="font-bold text-gray-700 text-lg">消費紀錄</h2>
         <div class="flex space-x-2 items-center">
             <input type="date" id="filterStart" onchange="applyFilter()" class="text-xs border rounded p-1 outline-none focus:ring-1 focus:ring-indigo-400">
             <span class="text-gray-400 text-xs">~</span>
             <input type="date" id="filterEnd" onchange="applyFilter()" class="text-xs border rounded p-1 outline-none focus:ring-1 focus:ring-indigo-400">
+        </div>
+    </div>
+
+    <!-- 總額加總顯示區區 -->
+    <div id="summaryStats" class="grid grid-cols-2 gap-3 mb-4 px-1">
+        <div class="bg-red-50 p-3 rounded-xl border border-red-100">
+            <div class="text-[10px] text-red-400 font-bold uppercase tracking-tight">JPY 總計</div>
+            <div id="totalJPY" class="text-lg font-black text-red-600">0</div>
+        </div>
+        <div class="bg-emerald-50 p-3 rounded-xl border border-emerald-100">
+            <div class="text-[10px] text-emerald-500 font-bold uppercase tracking-tight">台幣總額 (含換算)</div>
+            <div id="totalTWD" class="text-lg font-black text-emerald-700">0</div>
         </div>
     </div>
 
@@ -119,10 +131,8 @@
             const isToday = selectedDate.toDateString() === today.toDateString();
             
             if (isToday) {
-                // 如果是今天，直接傳送當下時間對象
                 finalDate = today.toString(); 
             } else {
-                // 如果是補登，設定為該日 21:00
                 selectedDate.setHours(21, 0, 0, 0);
                 finalDate = selectedDate.toString();
             }
@@ -132,7 +142,6 @@
             btn.innerText = "儲存中...";
 
             try {
-                // 為了極速，使用 no-cors POST
                 await fetch(GAS_URL, {
                     method: 'POST',
                     mode: 'no-cors',
@@ -148,7 +157,6 @@
                 document.getElementById('item').value = '';
                 document.getElementById('amount').value = '';
                 
-                // 背景同步最新資料
                 loadDataFromServer();
                 
             } catch (error) {
@@ -180,6 +188,7 @@
 
             if (!rawDataCache || rawDataCache.length === 0) {
                 container.innerHTML = '<div class="text-center text-gray-400 py-10">尚無紀錄</div>';
+                updateSummary(0, 0);
                 return;
             }
 
@@ -190,10 +199,28 @@
 
             if (filtered.length === 0) {
                 container.innerHTML = '<div class="text-center text-gray-400 py-10">所選區間內無紀錄</div>';
+                updateSummary(0, 0);
                 return;
             }
 
+            // 計算總額
+            let jpySum = 0;
+            let twdSum = 0;
+            filtered.forEach(item => {
+                if (item['幣別'] === 'JPY') jpySum += Number(item['金額']);
+                twdSum += Number(item['TWD']);
+            });
+            updateSummary(jpySum, twdSum);
+
             renderList(filtered);
+        }
+
+        /**
+         * 更新統計數字介面
+         */
+        function updateSummary(jpy, twd) {
+            document.getElementById('totalJPY').innerText = jpy.toLocaleString();
+            document.getElementById('totalTWD').innerText = 'NT$ ' + Math.round(twd).toLocaleString();
         }
 
         function renderList(items) {
