@@ -101,19 +101,18 @@ document.getElementById('form').onsubmit = async(e)=>{
   const payload = {
     action:'ADD',
     date: iso,
-    item: item.value,
-    amount: amount.value,
-    currency: currency.value
+    item: document.getElementById('item').value,
+    amount: document.getElementById('amount').value,
+    currency: document.getElementById('currency').value
   };
 
-  /* 先加到畫面（超順） */
   const fake = {
     id: 'temp_'+Date.now(),
     date: iso,
     item: payload.item,
     amount: payload.amount,
     currency: payload.currency,
-    twd: payload.amount
+    twd: Number(payload.amount)
   };
 
   dataList.unshift(fake);
