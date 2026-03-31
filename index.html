@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>旅遊記帳本 - 極致流暢版</title>
+    <title>旅遊記帳本 - 最終穩定版</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&display=swap');
@@ -43,12 +43,6 @@
         .no-scrollbar::-webkit-scrollbar { display: none; }
         .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
 
-        .removing {
-            transform: translateX(100%);
-            opacity: 0;
-            transition: all 0.3s ease;
-        }
-
         .spinner {
             display: inline-block;
             width: 1.25rem;
@@ -60,9 +54,7 @@
             margin-right: 0.5rem;
             vertical-align: middle;
         }
-        @keyframes spin {
-            to { transform: rotate(360deg); }
-        }
+        @keyframes spin { to { transform: rotate(360deg); } }
     </style>
 </head>
 <body class="bg-slate-50 min-h-screen pb-10">
@@ -75,7 +67,6 @@
     </div>
 
     <div class="max-w-xl mx-auto px-4 pt-6 space-y-6">
-        
         <!-- 表單卡片 -->
         <div class="bg-white p-6 rounded-[2rem] shadow-xl shadow-slate-200/50 border border-white">
             <div class="flex items-center justify-between mb-6">
@@ -93,20 +84,14 @@
                 <div class="grid grid-cols-12 gap-3">
                     <div class="col-span-5 space-y-1">
                         <label class="text-xs font-bold text-slate-400 ml-1 uppercase">日期</label>
-                        <input type="date" id="inputDate" required
-                            class="w-full bg-slate-50 border-none p-4 rounded-2xl outline-none focus:ring-2 focus:ring-blue-500 text-sm font-bold text-slate-600">
+                        <input type="date" id="inputDate" required class="w-full bg-slate-50 border-none p-4 rounded-2xl outline-none focus:ring-2 focus:ring-blue-500 text-sm font-bold text-slate-600">
                     </div>
                     <div class="col-span-3 space-y-1">
                         <label class="text-xs font-bold text-slate-400 ml-1 uppercase">幣別</label>
-                        <div class="relative">
-                            <select id="currency" class="w-full bg-slate-50 p-4 rounded-2xl outline-none focus:ring-2 focus:ring-blue-500 font-bold text-slate-600 appearance-none text-sm">
-                                <option value="JPY">JPY</option>
-                                <option value="TWD">TWD</option>
-                            </select>
-                            <div class="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400">
-                                <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M19 9l-7 7-7-7" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"></path></svg>
-                            </div>
-                        </div>
+                        <select id="currency" class="w-full bg-slate-50 p-4 rounded-2xl outline-none focus:ring-2 focus:ring-blue-500 font-bold text-slate-600 text-sm">
+                            <option value="JPY">JPY</option>
+                            <option value="TWD">TWD</option>
+                        </select>
                     </div>
                     <div class="col-span-4 space-y-1">
                         <label class="text-xs font-bold text-slate-400 ml-1 uppercase">金額</label>
@@ -115,7 +100,7 @@
                     </div>
                 </div>
 
-                <button type="submit" id="submitBtn" class="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 disabled:cursor-not-allowed text-white font-black py-5 rounded-2xl shadow-lg shadow-blue-200 transition btn-active text-lg mt-2 flex items-center justify-center">
+                <button type="submit" id="submitBtn" class="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white font-black py-5 rounded-2xl shadow-lg transition btn-active text-lg mt-2 flex items-center justify-center">
                     <span id="btnText">確認儲存</span>
                 </button>
             </form>
@@ -144,7 +129,7 @@
 
                 <div class="bg-blue-50 rounded-2xl p-4 flex justify-between items-center border border-blue-100">
                     <div>
-                        <p class="text-[10px] font-bold text-blue-400 uppercase tracking-wider">今日/範圍內總計</p>
+                        <p class="text-[10px] font-bold text-blue-400 uppercase tracking-wider">總計</p>
                         <p class="text-xs text-blue-500 font-medium mt-0.5" id="totalCount">共 0 筆消費</p>
                     </div>
                     <div class="text-right">
@@ -155,16 +140,14 @@
 
             <div class="max-h-[60vh] overflow-y-auto no-scrollbar">
                 <table class="w-full text-left border-collapse">
-                    <tbody id="listBody" class="divide-y divide-slate-50">
-                        <!-- 動態內容 -->
-                    </tbody>
+                    <tbody id="listBody" class="divide-y divide-slate-50"></tbody>
                 </table>
             </div>
         </div>
     </div>
 
     <script>
-        const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyARg5ZDoUF4zQSX9nBVcytl4z8h83CP8hfrPHf70vusnLKCqcaNqagd-smTsiNL9ZP/exec'; // ⚠️ 請在此處填入您的 GAS 部署網址
+        const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyARg5ZDoUF4zQSX9nBVcytl4z8h83CP8hfrPHf70vusnLKCqcaNqagd-smTsiNL9ZP/exec'; // ⚠️ 請務必填入您的 GAS 部署網址
 
         let fullData = JSON.parse(localStorage.getItem('travel_records_v3') || '[]');
         let jpyRate = parseFloat(localStorage.getItem('jpy_rate_v3') || '0.215');
@@ -181,46 +164,21 @@
         }
 
         async function initRate() {
-            const now = new Date();
-            const tzOffset = 8;
-            const currentTWHour = now.getUTCHours() + tzOffset;
-            let baseDate = new Date(now);
-            if (currentTWHour < 9) baseDate.setDate(baseDate.getDate() - 1);
-            const dateKey = baseDate.toLocaleDateString('en-CA', { timeZone: 'Asia/Taipei' });
-
-            const cachedDate = localStorage.getItem('jpy_rate_date_v3');
-            if (cachedDate === dateKey && localStorage.getItem('jpy_rate_v3')) {
-                jpyRate = parseFloat(localStorage.getItem('jpy_rate_v3'));
-                updateRateUI(true, dateKey);
-                return;
-            }
-
             try {
                 const res = await fetch("https://open.er-api.com/v6/latest/JPY");
                 const data = await res.json();
                 jpyRate = data.rates.TWD;
                 localStorage.setItem('jpy_rate_v3', jpyRate);
-                localStorage.setItem('jpy_rate_date_v3', dateKey);
-                updateRateUI(true, dateKey);
-            } catch (e) { updateRateUI(false); }
-        }
-
-        function updateRateUI(ok, dateKey) {
-            const el = document.getElementById('rateStatus');
-            if (el) {
-                if (ok) {
-                    el.innerText = `${dateKey} 匯率: ${jpyRate.toFixed(4)}`;
-                    el.classList.replace('text-slate-400', 'text-blue-500');
-                } else {
-                    el.innerText = "匯率連線失敗";
-                    el.classList.add('text-orange-400');
-                }
+                document.getElementById('rateStatus').innerText = `匯率: ${jpyRate.toFixed(4)}`;
+                document.getElementById('rateStatus').classList.replace('text-slate-400', 'text-blue-500');
+            } catch (e) {
+                document.getElementById('rateStatus').innerText = "匯率載入失敗";
             }
         }
 
         document.getElementById('payForm').onsubmit = async (e) => {
             e.preventDefault();
-            if (!SCRIPT_URL) { alert("⚠️ 請先設定 SCRIPT_URL"); return; }
+            if (!SCRIPT_URL) { alert("請先設定 SCRIPT_URL"); return; }
 
             const submitBtn = document.getElementById('submitBtn');
             const btnText = document.getElementById('btnText');
@@ -234,50 +192,29 @@
             const twdEstimate = currency === 'JPY' ? Math.round(amount * jpyRate) : amount;
             
             const todayStr = getTaiwanTodayStr();
-            
-            let finalTimestamp;
-            if (selectedDate === todayStr) {
-                finalTimestamp = new Date().toISOString();
-            } else {
-                finalTimestamp = new Date(`${selectedDate}T21:00:00+08:00`).toISOString();
-            }
+            let finalTimestamp = (selectedDate === todayStr) ? new Date().toISOString() : new Date(`${selectedDate}T21:00:00+08:00`).toISOString();
 
             const optimisticId = 'temp-' + Date.now();
-            const optimisticItem = {
-                id: optimisticId, 
-                item, amount, currency, twd: twdEstimate,
-                date: finalTimestamp, 
-                optimistic: true
-            };
+            const optimisticItem = { id: optimisticId, item, amount, currency, twd: twdEstimate, date: finalTimestamp, optimistic: true };
 
             fullData.unshift(optimisticItem);
             fullData.sort((a, b) => new Date(b.date) - new Date(a.date));
             
             document.getElementById('startDate').value = selectedDate;
             document.getElementById('endDate').value = selectedDate;
-
-            document.getElementById('item').value = '';
-            document.getElementById('amount').value = '';
             render(fullData);
-            document.getElementById('item').focus();
 
             try {
                 await fetch(SCRIPT_URL, {
                     method: 'POST',
                     mode: 'no-cors',
-                    body: JSON.stringify({ 
-                        action: 'ADD', 
-                        item, 
-                        amount, 
-                        currency, 
-                        twd: twdEstimate, 
-                        date: finalTimestamp, 
-                        id: optimisticId
-                    })
+                    body: JSON.stringify({ action: 'ADD', item, amount, currency, twd: twdEstimate, date: finalTimestamp, id: optimisticId })
                 });
                 setTimeout(() => {
                     submitBtn.disabled = false;
                     btnText.innerText = '確認儲存';
+                    document.getElementById('item').value = '';
+                    document.getElementById('amount').value = '';
                     fetchData(); 
                 }, 1000);
             } catch (error) {
@@ -288,7 +225,7 @@
         };
 
         async function fetchData() {
-            if (!SCRIPT_URL) { render(fullData); return; }
+            if (!SCRIPT_URL) return;
             try {
                 const res = await fetch(SCRIPT_URL);
                 const data = await res.json();
@@ -297,96 +234,71 @@
                     localStorage.setItem('travel_records_v3', JSON.stringify(fullData));
                     render(fullData);
                 }
-            } catch (e) { 
-                console.error(e);
-                render(fullData);
-            } finally { 
-                document.body.classList.remove('is-loading'); 
-            }
+            } catch (e) { console.error(e); render(fullData); }
         }
 
         function render(items) {
             const listBody = document.getElementById('listBody');
-            const totalCountEl = document.getElementById('totalCount');
-            const totalAmountEl = document.getElementById('totalAmount');
-            
             const startVal = document.getElementById('startDate').value;
             const endVal = document.getElementById('endDate').value;
             
-            // 修正篩選邏輯：結束時間設定為該日的隔日 00:00:00
             const startTime = startVal ? new Date(startVal + 'T00:00:00+08:00').getTime() : 0;
             let endTime = Infinity;
             if (endVal) {
                 const endD = new Date(endVal + 'T00:00:00+08:00');
-                endD.setDate(endD.getDate() + 1); // 設為下一天凌晨
+                endD.setDate(endD.getDate() + 1); 
                 endTime = endD.getTime();
             }
 
             let filteredItems = items.filter(i => {
                 const t = new Date(i.date).getTime();
-                // 使用小於 endTime (隔日凌晨) 來包含當天所有秒數
                 return t >= startTime && t < endTime;
             });
 
             const totalSum = filteredItems.reduce((sum, i) => sum + (Number(i.twd) || 0), 0);
-            totalCountEl.innerText = `共 ${filteredItems.length} 筆消費`;
-            totalAmountEl.innerText = `NT$ ${totalSum.toLocaleString()}`;
+            document.getElementById('totalCount').innerText = `共 ${filteredItems.length} 筆消費`;
+            document.getElementById('totalAmount').innerText = `NT$ ${totalSum.toLocaleString()}`;
 
             if (filteredItems.length === 0) {
-                listBody.innerHTML = '<tr><td class="p-20 text-center text-slate-300 italic font-medium">無紀錄</td></tr>';
+                listBody.innerHTML = '<tr><td class="p-20 text-center text-slate-300 italic">無紀錄</td></tr>';
                 return;
             }
 
             listBody.innerHTML = filteredItems.map(i => `
-                <tr id="row-${i.id}" class="transition-all ${i.optimistic ? 'optimistic-item' : ''}">
+                <tr id="row-${i.id}" class="${i.optimistic ? 'optimistic-item' : ''}">
                     <td class="px-6 py-5">
                         <div class="font-bold text-slate-800 text-base">${i.item}</div>
-                        <div class="text-[10px] text-slate-400 font-bold mt-1 flex items-center gap-2">
-                            <span>${formatDate(i.date)}</span>
-                            <span class="bg-slate-100 px-1.5 py-0.5 rounded text-slate-500">${Number(i.amount).toLocaleString()} ${i.currency}</span>
+                        <div class="text-[10px] text-slate-400 font-bold mt-1">
+                            ${formatDate(i.date)} • ${Number(i.amount).toLocaleString()} ${i.currency}
                         </div>
                     </td>
-                    <td class="px-6 py-5 text-right">
-                        <div class="text-blue-600 font-black text-xl">
-                            <span class="text-[10px] mr-0.5">NT$</span>${Math.round(i.twd || 0).toLocaleString()}
-                        </div>
+                    <td class="px-6 py-5 text-right font-black text-blue-600 text-xl">
+                        <span class="text-xs mr-0.5">NT$</span>${Math.round(i.twd || 0).toLocaleString()}
                     </td>
                     <td class="px-4 py-5 text-right w-10">
-                        ${i.optimistic ? `<div class="w-4 h-4 border-2 border-blue-100 border-t-blue-500 rounded-full animate-spin ml-auto"></div>` : 
-                        `<button onclick="deleteItem('${i.id}')" class="text-slate-200 hover:text-red-400 p-2"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path></svg></button>`}
+                        ${i.optimistic ? `<div class="w-4 h-4 border-2 border-t-blue-500 rounded-full animate-spin ml-auto"></div>` : 
+                        `<button onclick="deleteItem('${i.id}')" class="text-slate-200 hover:text-red-400 p-2">✕</button>`}
                     </td>
                 </tr>
             `).join('');
         }
 
         async function deleteItem(id) {
-            if (!confirm('要刪除這筆紀錄嗎？')) return;
-            const row = document.getElementById(`row-${id}`);
-            if (row) row.classList.add('removing');
-            setTimeout(async () => {
-                fullData = fullData.filter(i => i.id !== id);
-                localStorage.setItem('travel_records_v3', JSON.stringify(fullData));
-                render(fullData);
-                try {
-                    await fetch(SCRIPT_URL, { method: 'POST', mode: 'no-cors', body: JSON.stringify({ action: 'DELETE', id: id }) });
-                } catch(e) { fetchData(); }
-            }, 300);
+            if (!confirm('要刪除嗎？')) return;
+            fullData = fullData.filter(i => i.id !== id);
+            localStorage.setItem('travel_records_v3', JSON.stringify(fullData));
+            render(fullData);
+            try {
+                await fetch(SCRIPT_URL, { method: 'POST', mode: 'no-cors', body: JSON.stringify({ action: 'DELETE', id: id }) });
+            } catch(e) { fetchData(); }
         }
 
         function formatDate(dStr) {
             const d = new Date(dStr);
-            if (isNaN(d)) return dStr;
-            const month = d.toLocaleString('zh-TW', { month: 'numeric', timeZone: 'Asia/Taipei' });
-            const day = d.toLocaleString('zh-TW', { day: 'numeric', timeZone: 'Asia/Taipei' });
-            const time = d.toLocaleString('zh-TW', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Asia/Taipei' });
-            return `${month}/${day} ${time}`;
+            return isNaN(d) ? dStr : d.toLocaleString('zh-TW', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Asia/Taipei' });
         }
 
-        window.onload = () => { 
-            initDateFilters();
-            initRate(); 
-            fetchData(); 
-        };
+        window.onload = () => { initDateFilters(); initRate(); fetchData(); };
     </script>
 </body>
 </html>
