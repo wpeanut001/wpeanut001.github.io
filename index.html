@@ -3,57 +3,19 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>旅遊記帳本 - 最終穩定版</title>
+    <title>旅遊記帳本 - 日期修正穩定版</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&display=swap');
-        
-        body {
-            font-family: 'Noto Sans TC', sans-serif;
-            -webkit-tap-highlight-color: transparent;
-        }
-
-        .loading-overlay {
-            display: none;
-            position: fixed;
-            top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(255,255,255,0.7);
-            z-index: 100;
-            justify-content: center;
-            align-items: center;
-            backdrop-filter: blur(5px);
-        }
+        body { font-family: 'Noto Sans TC', sans-serif; -webkit-tap-highlight-color: transparent; }
+        .loading-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(255,255,255,0.7); z-index: 100; justify-content: center; align-items: center; backdrop-filter: blur(5px); }
         body.is-loading .loading-overlay { display: flex; }
-        
-        .optimistic-item {
-            opacity: 0.6;
-            border-left: 4px solid #3b82f6;
-            background-color: #f0f7ff;
-            animation: pulse 2s infinite;
-        }
-
-        @keyframes pulse {
-            0% { opacity: 0.6; }
-            50% { opacity: 0.4; }
-            100% { opacity: 0.6; }
-        }
-
+        .optimistic-item { opacity: 0.6; border-left: 4px solid #3b82f6; background-color: #f0f7ff; animation: pulse 2s infinite; }
+        @keyframes pulse { 0% { opacity: 0.6; } 50% { opacity: 0.4; } 100% { opacity: 0.6; } }
         .btn-active:active { transform: scale(0.96); }
-        
         .no-scrollbar::-webkit-scrollbar { display: none; }
         .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
-
-        .spinner {
-            display: inline-block;
-            width: 1.25rem;
-            height: 1.25rem;
-            border: 3px solid rgba(255,255,255,0.3);
-            border-radius: 50%;
-            border-top-color: #fff;
-            animation: spin 1s ease-in-out infinite;
-            margin-right: 0.5rem;
-            vertical-align: middle;
-        }
+        .spinner { display: inline-block; width: 1.25rem; height: 1.25rem; border: 3px solid rgba(255,255,255,0.3); border-radius: 50%; border-top-color: #fff; animation: spin 1s ease-in-out infinite; margin-right: 0.5rem; vertical-align: middle; }
         @keyframes spin { to { transform: rotate(360deg); } }
     </style>
 </head>
@@ -67,7 +29,6 @@
     </div>
 
     <div class="max-w-xl mx-auto px-4 pt-6 space-y-6">
-        <!-- 表單卡片 -->
         <div class="bg-white p-6 rounded-[2rem] shadow-xl shadow-slate-200/50 border border-white">
             <div class="flex items-center justify-between mb-6">
                 <h1 class="text-2xl font-black text-slate-800 tracking-tight">✍️ 快速記帳</h1>
@@ -106,7 +67,6 @@
             </form>
         </div>
 
-        <!-- 列表卡片 -->
         <div class="bg-white rounded-[2rem] shadow-xl shadow-slate-200/50 overflow-hidden border border-white">
             <div class="p-6 border-b border-slate-50">
                 <div class="flex justify-between items-center mb-4">
@@ -129,7 +89,7 @@
 
                 <div class="bg-blue-50 rounded-2xl p-4 flex justify-between items-center border border-blue-100">
                     <div>
-                        <p class="text-[10px] font-bold text-blue-400 uppercase tracking-wider">總計</p>
+                        <p class="text-[10px] font-bold text-blue-400 uppercase tracking-wider">總計 (所選範圍)</p>
                         <p class="text-xs text-blue-500 font-medium mt-0.5" id="totalCount">共 0 筆消費</p>
                     </div>
                     <div class="text-right">
@@ -147,7 +107,8 @@
     </div>
 
     <script>
-        const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyARg5ZDoUF4zQSX9nBVcytl4z8h83CP8hfrPHf70vusnLKCqcaNqagd-smTsiNL9ZP/exec'; // ⚠️ 請務必填入您的 GAS 部署網址
+        // ⚠️ 請務必填入您的 GAS 部署網址
+        const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyARg5ZDoUF4zQSX9nBVcytl4z8h83CP8hfrPHf70vusnLKCqcaNqagd-smTsiNL9ZP/exec'; 
 
         let fullData = JSON.parse(localStorage.getItem('travel_records_v3') || '[]');
         let jpyRate = parseFloat(localStorage.getItem('jpy_rate_v3') || '0.215');
@@ -192,15 +153,21 @@
             const twdEstimate = currency === 'JPY' ? Math.round(amount * jpyRate) : amount;
             
             const todayStr = getTaiwanTodayStr();
-            // 如果是選今天，用當前精確 ISO 時間；否則設為該日晚間 9 點
-            let finalTimestamp = (selectedDate === todayStr) ? new Date().toISOString() : new Date(`${selectedDate}T21:00:00+08:00`).toISOString();
+            
+            // 重要：修正日期處理
+            // 不論當天還是補登，都產出當前時間點的 ISO，但將日期替換為選中的日期
+            const now = new Date();
+            const timeStr = now.toTimeString().split(' ')[0]; // 取得 HH:mm:ss
+            const finalTimestamp = new Date(`${selectedDate}T${timeStr}`).toISOString();
 
             const optimisticId = 'temp-' + Date.now();
             const optimisticItem = { id: optimisticId, item, amount, currency, twd: twdEstimate, date: finalTimestamp, optimistic: true };
 
+            // 樂觀更新介面
             fullData.unshift(optimisticItem);
             fullData.sort((a, b) => new Date(b.date) - new Date(a.date));
             
+            // 讓使用者立刻在列表看到剛才輸入的日期範圍
             document.getElementById('startDate').value = selectedDate;
             document.getElementById('endDate').value = selectedDate;
             render(fullData);
@@ -209,7 +176,15 @@
                 await fetch(SCRIPT_URL, {
                     method: 'POST',
                     mode: 'no-cors',
-                    body: JSON.stringify({ action: 'ADD', item, amount, currency, twd: twdEstimate, date: finalTimestamp, id: optimisticId })
+                    body: JSON.stringify({ 
+                        action: 'ADD', 
+                        item, 
+                        amount, 
+                        currency, 
+                        twd: twdEstimate, 
+                        date: finalTimestamp, // 傳送標準 ISO 格式
+                        id: optimisticId 
+                    })
                 });
                 setTimeout(() => {
                     submitBtn.disabled = false;
@@ -243,31 +218,22 @@
             const startVal = document.getElementById('startDate').value;
             const endVal = document.getElementById('endDate').value;
             
-            // 強制設定時區為台北的 00:00:00 作為起點
-            const startTime = startVal ? new Date(startVal + 'T00:00:00+08:00').getTime() : 0;
-            let endTime = Infinity;
-            if (endVal) {
-                const endD = new Date(endVal + 'T00:00:00+08:00');
-                // 結束時間設為所選日的隔日凌晨，確保當天 23:59:59 也能被包含
-                endD.setDate(endD.getDate() + 1); 
-                endTime = endD.getTime();
-            }
+            // 將篩選範圍設定為該日期的起點與終點
+            const startTime = startVal ? new Date(startVal + 'T00:00:00').getTime() : 0;
+            const endTime = endVal ? new Date(endVal + 'T23:59:59').getTime() : Infinity;
 
             let filteredItems = items.filter(i => {
-                // 處理可能出現的各種日期格式
                 let itemDate = new Date(i.date);
-                
-                // 如果 Date 物件無效 (Invalid Date)，嘗試手動修復
+                // 處理舊格式相容性
                 if (isNaN(itemDate.getTime())) {
-                    // 針對 Google 試算表有時會回傳 "2023/10/24 下午 2:00:00" 這種格式處理
                     const fixedDateStr = String(i.date).replace(/\//g, '-').replace('下午', 'PM').replace('上午', 'AM');
                     itemDate = new Date(fixedDateStr);
                 }
-                
                 const t = itemDate.getTime();
-                return t >= startTime && t < endTime;
+                return t >= startTime && t <= endTime;
             });
 
+            // 計算總計
             const totalSum = filteredItems.reduce((sum, i) => sum + (Number(i.twd) || 0), 0);
             document.getElementById('totalCount').innerText = `共 ${filteredItems.length} 筆消費`;
             document.getElementById('totalAmount').innerText = `NT$ ${totalSum.toLocaleString()}`;
@@ -312,6 +278,7 @@
                 const fixed = String(dStr).replace(/\//g, '-').replace('下午', 'PM').replace('上午', 'AM');
                 d = new Date(fixed);
             }
+            // 統一顯示為： 3/31 14:30 格式
             return isNaN(d) ? dStr : d.toLocaleString('zh-TW', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Asia/Taipei' });
         }
 
