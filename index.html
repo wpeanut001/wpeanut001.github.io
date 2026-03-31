@@ -85,17 +85,33 @@
         // 重要：請務必替換為您部署後的 GAS URL
         const GAS_URL = "https://script.google.com/macros/s/AKfycbyARg5ZDoUF4zQSX9nBVcytl4z8h83CP8hfrPHf70vusnLKCqcaNqagd-smTsiNL9ZP/exec";
         
-        // 本地資料快取，讓篩選不需要經過網路
+        // 本地資料快取
         let rawDataCache = [];
 
         // 初始化日期選擇器為今天
-        const todayStr = new Date().toLocaleDateString('sv-SE'); // 格式 yyyy-mm-dd
+        const todayStr = new Date().toLocaleDateString('sv-SE'); 
         document.getElementById('date').value = todayStr;
         
-        // 初始化篩選器預設範圍 (本月)
         const now = new Date();
         document.getElementById('filterStart').valueAsDate = new Date(now.getFullYear(), now.getMonth(), 1);
         document.getElementById('filterEnd').valueAsDate = now;
+
+        /**
+         * 格式化本地日期時間為 ISO 格式 (保留時區資訊)
+         */
+        function getLocalISOString(date) {
+            const tzOffset = -date.getTimezoneOffset();
+            const diff = tzOffset >= 0 ? '+' : '-';
+            const pad = n => `${Math.floor(Math.abs(n))}`.padStart(2, '0');
+            return date.getFullYear() +
+                '-' + pad(date.getMonth() + 1) +
+                '-' + pad(date.getDate()) +
+                'T' + pad(date.getHours()) +
+                ':' + pad(date.getMinutes()) +
+                ':' + pad(date.getSeconds()) +
+                diff + pad(tzOffset / 60) +
+                ':' + pad(tzOffset % 60);
+        }
 
         /**
          * 送出資料到 GAS
@@ -112,24 +128,22 @@
                 return;
             }
 
-            // --- 智慧時間判斷邏輯 ---
+            // --- 修正時間邏輯：處理本地時區 ---
             let finalDate;
             const selectedDate = new Date(selectedDateStr);
             const today = new Date();
             
-            // 比較日期 (忽略具體分秒)
             const isToday = selectedDate.toDateString() === today.toDateString();
             
             if (isToday) {
-                // 如果選的是今天，保留現在的時間戳記
-                finalDate = today.toISOString();
+                // 如果是今天，使用「現在」的確切時間
+                finalDate = getLocalISOString(today);
             } else {
-                // 如果是補登過去日期，設定為該日晚上 21:00
+                // 如果是補登日期，設定為該日的 21:00
                 selectedDate.setHours(21, 0, 0, 0);
-                finalDate = selectedDate.toISOString();
+                finalDate = getLocalISOString(selectedDate);
             }
 
-            // 進入讀取狀態
             const originalBtnText = btn.innerText;
             btn.disabled = true;
             btn.innerText = "儲存中...";
@@ -140,18 +154,16 @@
                     mode: 'no-cors',
                     body: JSON.stringify({
                         action: 'add',
-                        date: finalDate,
+                        date: finalDate, // 傳送包含本地時區偏移的字串
                         item: item,
                         currency: currency,
                         amount: amount
                     })
                 });
 
-                // 清空輸入
                 document.getElementById('item').value = '';
                 document.getElementById('amount').value = '';
                 
-                // 成功後從背景更新資料清單
                 await loadDataFromServer();
                 
             } catch (error) {
@@ -162,9 +174,6 @@
             }
         }
 
-        /**
-         * 從 GAS 抓取完整資料並存入本地快取 (rawDataCache)
-         */
         async function loadDataFromServer() {
             try {
                 const response = await fetch(GAS_URL, {
@@ -172,16 +181,13 @@
                     body: JSON.stringify({ action: 'getData' })
                 });
                 rawDataCache = await response.json();
-                applyFilter(); // 抓完後立即由本地端進行渲染，無須等待網路
+                applyFilter();
             } catch (e) {
                 document.getElementById('recordContainer').innerHTML = 
-                    '<div class="text-center text-red-400 py-10">資料讀取失敗，請確認 GAS 網址</div>';
+                    '<div class="text-center text-red-400 py-10">資料讀取失敗</div>';
             }
         }
 
-        /**
-         * 本地篩選邏輯 (不經由網路，即時反應畫面)
-         */
         function applyFilter() {
             const container = document.getElementById('recordContainer');
             const start = document.getElementById('filterStart').value;
@@ -192,7 +198,6 @@
                 return;
             }
 
-            // 在本地記憶體進行過濾與排序
             const filtered = rawDataCache.filter(row => {
                 const rowDate = row['日期'].split(' ')[0];
                 return rowDate >= start && rowDate <= end;
@@ -206,9 +211,6 @@
             renderList(filtered);
         }
 
-        /**
-         * 渲染 HTML 清單
-         */
         function renderList(items) {
             const container = document.getElementById('recordContainer');
             container.innerHTML = items.map(item => `
@@ -232,24 +234,16 @@
             `).join('');
         }
 
-        /**
-         * 刪除紀錄
-         */
         async function deleteRecord(id) {
             if (!confirm("確定要刪除這筆紀錄嗎？")) return;
-            
             try {
-                // Optimistic UI：本地端先移除，讓使用者感覺瞬間刪除
                 rawDataCache = rawDataCache.filter(item => item['ID'] !== id);
                 applyFilter();
-
                 await fetch(GAS_URL, {
                     method: 'POST',
                     mode: 'no-cors',
                     body: JSON.stringify({ action: 'delete', id: id })
                 });
-                
-                // 背景同步確認數據正確
                 loadDataFromServer();
             } catch (e) {
                 alert("刪除失敗");
@@ -257,7 +251,6 @@
             }
         }
 
-        // 初次開啟頁面時從伺服器抓取資料
         window.onload = loadDataFromServer;
     </script>
 </body>
