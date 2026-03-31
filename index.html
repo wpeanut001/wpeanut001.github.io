@@ -175,7 +175,6 @@
         // 取得台灣當前日期 YYYY-MM-DD
         function getTaiwanToday() {
             const now = new Date();
-            // 使用 toLocaleDateString 確保取得台灣時區的日期
             const twDate = now.toLocaleDateString('zh-TW', { year: 'numeric', month: '2-digit', day: '2-digit', timeZone: 'Asia/Taipei' });
             return twDate.replace(/\//g, '-');
         }
@@ -190,11 +189,9 @@
         // 新版匯率初始化邏輯：每日台灣時間 09:00 更新
         async function initRate() {
             const now = new Date();
-            // 計算台灣時間 (UTC+8) 的小時
             const tzOffset = 8;
             const currentTWHour = now.getUTCHours() + tzOffset;
             
-            // 決定「匯率基準日」
             let baseDate = new Date(now);
             if (currentTWHour < 9) {
                 baseDate.setDate(baseDate.getDate() - 1);
@@ -251,27 +248,42 @@
             const item = document.getElementById('item').value;
             const amount = parseFloat(document.getElementById('amount').value);
             const currency = document.getElementById('currency').value;
-            const selectedDate = document.getElementById('inputDate').value;
+            const selectedDate = document.getElementById('inputDate').value; // YYYY-MM-DD
             const twdEstimate = currency === 'JPY' ? Math.round(amount * jpyRate) : amount;
             
             const tempId = 'temp-' + Date.now();
             const todayStr = getTaiwanToday();
+            
+            // 處理儲存的時間戳記
+            let finalTimestamp;
+            if (selectedDate === todayStr) {
+                // 如果是今天，記錄當下的實際時間
+                finalTimestamp = new Date().toISOString();
+            } else {
+                // 如果是補錄之前的日期，固定設為該日的 21:00:00 (台北時間)
+                const dateParts = selectedDate.split('-');
+                // 使用台北時間建構，避免時區跑掉
+                const patchDate = new Date(`${selectedDate}T21:00:00+08:00`);
+                finalTimestamp = patchDate.toISOString();
+            }
+
             const optimisticItem = {
                 id: tempId, 
                 item, 
                 amount, 
                 currency, 
                 twd: twdEstimate,
-                date: (selectedDate === todayStr) ? new Date().toISOString() : new Date(selectedDate).toISOString(), 
+                date: finalTimestamp, 
                 optimistic: true
             };
 
             fullData.unshift(optimisticItem);
             fullData.sort((a, b) => new Date(b.date) - new Date(a.date));
             
-            document.getElementById('payForm').reset();
-            // 提交後強制恢復為今天
-            initDateFilters(); 
+            // 重置表單，但不重置篩選器（以便連續錄入同一天資料時，列表能正確顯示該日期內容）
+            document.getElementById('item').value = '';
+            document.getElementById('amount').value = '';
+            
             render(fullData);
             document.getElementById('item').focus();
 
@@ -286,7 +298,7 @@
                         amount, 
                         currency, 
                         twd: twdEstimate,
-                        date: selectedDate 
+                        date: finalTimestamp // 傳送帶有 21:00 的時間字串
                     })
                 });
                 
@@ -317,7 +329,6 @@
                 if (Array.isArray(data)) {
                     fullData = data;
                     localStorage.setItem('travel_records_v3', JSON.stringify(fullData));
-                    // 每次資料同步完畢，若沒有特定選擇，應確保顯示邏輯跟隨篩選器
                     render(fullData);
                 }
             } catch (e) { 
@@ -404,6 +415,7 @@
         function formatDate(dStr) {
             const d = new Date(dStr);
             if (isNaN(d)) return dStr;
+            // 顯示格式：月份/日期 小時:分鐘
             return `${d.getMonth()+1}/${d.getDate()} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
         }
 
