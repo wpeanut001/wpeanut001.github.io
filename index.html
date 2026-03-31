@@ -21,6 +21,10 @@
         input, select { font-size: 16px !important; } /* 防止 iOS 自動放大 */
         .loading-dots:after { content: ' .'; animation: dots 1.5s steps(5, end) infinite; }
         @keyframes dots { 0%, 20% { content: ''; } 40% { content: '.'; } 60% { content: '..'; } 80% { content: '...'; } }
+        
+        /* 列表載入動畫 */
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        .animate-fade-in { animation: fadeIn 0.3s ease-out forwards; }
     </style>
 </head>
 <body class="p-4 md:max-w-xl mx-auto pb-20">
@@ -63,12 +67,12 @@
     </div>
 
     <!-- 歷史紀錄標題與篩選 -->
-    <div class="flex justify-between items-center mb-4 px-2">
+    <div class="flex flex-wrap justify-between items-center mb-4 px-2 gap-2">
         <h2 class="font-bold text-gray-700">消費紀錄</h2>
-        <div class="flex space-x-2">
-            <input type="date" id="filterStart" class="text-xs border rounded p-1">
-            <input type="date" id="filterEnd" class="text-xs border rounded p-1">
-            <button onclick="loadData()" class="text-xs bg-indigo-100 text-indigo-700 px-2 py-1 rounded">篩選</button>
+        <div class="flex space-x-2 items-center">
+            <input type="date" id="filterStart" onchange="applyFilter()" class="text-xs border rounded p-1 outline-none focus:ring-1 focus:ring-indigo-400">
+            <span class="text-gray-400 text-xs">~</span>
+            <input type="date" id="filterEnd" onchange="applyFilter()" class="text-xs border rounded p-1 outline-none focus:ring-1 focus:ring-indigo-400">
         </div>
     </div>
 
@@ -80,9 +84,14 @@
     <script>
         // 重要：請務必替換為您部署後的 GAS URL
         const GAS_URL = "https://script.google.com/macros/s/AKfycbyARg5ZDoUF4zQSX9nBVcytl4z8h83CP8hfrPHf70vusnLKCqcaNqagd-smTsiNL9ZP/exec";
+        
+        // 本地資料快取
+        let rawDataCache = [];
 
         // 初始化日期
-        document.getElementById('date').valueAsDate = new Date();
+        const todayStr = new Date().toISOString().split('T')[0];
+        document.getElementById('date').value = todayStr;
+        
         const now = new Date();
         document.getElementById('filterStart').valueAsDate = new Date(now.getFullYear(), now.getMonth(), 1);
         document.getElementById('filterEnd').valueAsDate = now;
@@ -94,12 +103,29 @@
             const btn = document.getElementById('submitBtn');
             const item = document.getElementById('item').value.trim();
             const amount = document.getElementById('amount').value;
-            const date = document.getElementById('date').value;
+            const selectedDateStr = document.getElementById('date').value;
             const currency = document.getElementById('currency').value;
 
             if (!item || !amount) {
                 alert("請填寫項目與金額");
                 return;
+            }
+
+            // --- 修正時間邏輯 ---
+            let finalDate;
+            const selectedDate = new Date(selectedDateStr);
+            const today = new Date();
+            
+            // 比較日期 (不計時間)
+            const isToday = selectedDate.toDateString() === today.toDateString();
+            
+            if (isToday) {
+                // 如果是今天，使用現在時間
+                finalDate = today.toISOString();
+            } else {
+                // 如果是補登，設定為當天 21:00 (本地時間)
+                selectedDate.setHours(21, 0, 0, 0);
+                finalDate = selectedDate.toISOString();
             }
 
             // 進入讀取狀態
@@ -108,25 +134,23 @@
             btn.innerText = "儲存中...";
 
             try {
-                // 使用 POST 呼叫 GAS
                 await fetch(GAS_URL, {
                     method: 'POST',
-                    mode: 'no-cors', // 配合 GAS 的 no-cors 模式
+                    mode: 'no-cors',
                     body: JSON.stringify({
                         action: 'add',
-                        date: date,
+                        date: finalDate, // 傳送 ISO 字串
                         item: item,
                         currency: currency,
                         amount: amount
                     })
                 });
 
-                // 成功後立即反應：清空輸入框並刷新清單
                 document.getElementById('item').value = '';
                 document.getElementById('amount').value = '';
                 
-                // 為了速度，我們可以不等待 API 回傳，直接先在前端重新載入
-                loadData();
+                // 成功後背景刷新資料
+                await loadDataFromServer();
                 
             } catch (error) {
                 alert("連線失敗，請檢查網路");
@@ -137,35 +161,46 @@
         }
 
         /**
-         * 從 GAS 抓取資料並顯示
+         * 從 GAS 抓取完整資料並存入快取
          */
-        async function loadData() {
-            const container = document.getElementById('recordContainer');
-            const start = document.getElementById('filterStart').value;
-            const end = document.getElementById('filterEnd').value;
-
+        async function loadDataFromServer() {
             try {
                 const response = await fetch(GAS_URL, {
                     method: 'POST',
                     body: JSON.stringify({ action: 'getData' })
                 });
-                const data = await response.json();
-
-                if (!data || data.length === 0) {
-                    container.innerHTML = '<div class="text-center text-gray-400 py-10">尚無紀錄</div>';
-                    return;
-                }
-
-                const filtered = data.filter(row => {
-                    const rowDate = row['日期'].split(' ')[0];
-                    return rowDate >= start && rowDate <= end;
-                }).sort((a,b) => new Date(b['日期']) - new Date(a['日期']));
-
-                renderList(filtered);
-
+                rawDataCache = await response.json();
+                applyFilter(); // 抓完後立即更新畫面
             } catch (e) {
-                container.innerHTML = '<div class="text-center text-red-400 py-10">資料讀取失敗</div>';
+                document.getElementById('recordContainer').innerHTML = 
+                    '<div class="text-center text-red-400 py-10">資料讀取失敗</div>';
             }
+        }
+
+        /**
+         * 本地篩選邏輯 (不經由網路，即時反應)
+         */
+        function applyFilter() {
+            const container = document.getElementById('recordContainer');
+            const start = document.getElementById('filterStart').value;
+            const end = document.getElementById('filterEnd').value;
+
+            if (!rawDataCache || rawDataCache.length === 0) {
+                container.innerHTML = '<div class="text-center text-gray-400 py-10">尚無紀錄</div>';
+                return;
+            }
+
+            const filtered = rawDataCache.filter(row => {
+                const rowDate = row['日期'].split(' ')[0];
+                return rowDate >= start && rowDate <= end;
+            }).sort((a,b) => new Date(b['日期']) - new Date(a['日期']));
+
+            if (filtered.length === 0) {
+                container.innerHTML = '<div class="text-center text-gray-400 py-10">區間內無紀錄</div>';
+                return;
+            }
+
+            renderList(filtered);
         }
 
         /**
@@ -176,13 +211,13 @@
             container.innerHTML = items.map(item => `
                 <div class="card p-4 flex justify-between items-center animate-fade-in border-l-4 ${item['幣別'] === 'JPY' ? 'border-red-400' : 'border-emerald-400'}">
                     <div class="flex-1">
-                        <div class="flex items-center space-x-2">
-                            <span class="text-[10px] bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded">${item['日期'].split(' ')[0]}</span>
-                            <span class="font-bold text-gray-800">${item['項目']}</span>
+                        <div class="flex items-center space-x-2 text-[10px]">
+                            <span class="bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded tracking-tighter">${item['日期']}</span>
                         </div>
-                        <div class="mt-1 flex items-baseline space-x-2">
-                            <span class="text-lg font-semibold text-gray-900">${item['金額']} <small class="text-xs">${item['幣別']}</small></span>
-                            ${item['幣別'] === 'JPY' ? `<span class="text-xs text-gray-400">≈ NT$ ${item['TWD']}</span>` : ''}
+                        <div class="mt-1 font-bold text-gray-800">${item['項目']}</div>
+                        <div class="mt-0.5 flex items-baseline space-x-2">
+                            <span class="text-lg font-semibold text-gray-900">${Number(item['金額']).toLocaleString()} <small class="text-xs uppercase font-normal">${item['幣別']}</small></span>
+                            ${item['幣別'] === 'JPY' ? `<span class="text-xs text-gray-400">≈ NT$ ${Number(item['TWD']).toLocaleString()}</span>` : ''}
                         </div>
                     </div>
                     <button onclick="deleteRecord('${item['ID']}')" class="ml-4 p-2 text-gray-300 hover:text-red-500 transition-colors">
@@ -201,19 +236,26 @@
             if (!confirm("確定要刪除嗎？")) return;
             
             try {
+                // 本地預先移除 (Optimistic UI 更新)，讓使用者感覺變快
+                rawDataCache = rawDataCache.filter(item => item['ID'] !== id);
+                applyFilter();
+
                 await fetch(GAS_URL, {
                     method: 'POST',
                     mode: 'no-cors',
                     body: JSON.stringify({ action: 'delete', id: id })
                 });
-                loadData(); // 重新整理
+                
+                // 背景同步一次確保正確性
+                loadDataFromServer();
             } catch (e) {
                 alert("刪除失敗");
+                loadDataFromServer();
             }
         }
 
-        // 初始讀取
-        window.onload = loadData;
+        // 初始讀取從伺服器抓取
+        window.onload = loadDataFromServer;
     </script>
 </body>
 </html>
