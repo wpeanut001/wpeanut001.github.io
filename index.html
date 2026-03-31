@@ -6,7 +6,8 @@
     <title>旅遊記帳本（修復版）</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        .loading { opacity: 0.5; pointer-events: none; }
+        /* 按鈕禁用狀態樣式 */
+        .loading { opacity: 0.5; pointer-events: none; cursor: not-allowed; }
     </style>
 </head>
 <body class="bg-slate-50 p-4 md:p-10">
@@ -14,7 +15,7 @@
     <div class="max-w-3xl mx-auto bg-white p-6 rounded-xl shadow-sm space-y-6">
         <h1 class="text-2xl font-bold text-slate-800 border-b pb-4">🌍 旅遊記帳本</h1>
 
-        <!-- 表單 -->
+        <!-- 輸入表單 -->
         <form id="form" class="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
                 <label class="block text-sm font-medium text-gray-700">日期</label>
@@ -35,12 +36,12 @@
                     <option value="TWD">TWD (台幣)</option>
                 </select>
             </div>
-            <button id="submitBtn" class="md:col-span-2 bg-blue-600 hover:bg-blue-700 text-white font-bold p-3 rounded-lg transition duration-200">
+            <button id="submitBtn" type="submit" class="md:col-span-2 bg-blue-600 hover:bg-blue-700 text-white font-bold p-3 rounded-lg transition duration-200">
                 新增記錄
             </button>
         </form>
 
-        <!-- 列表 -->
+        <!-- 資料列表 -->
         <div class="overflow-x-auto">
             <table class="w-full text-left border-collapse">
                 <thead>
@@ -53,37 +54,49 @@
                     </tr>
                 </thead>
                 <tbody id="tbody" class="divide-y">
-                    <!-- 資料渲染區 -->
+                    <!-- 資料將透過 JavaScript 動態渲染 -->
                 </tbody>
             </table>
         </div>
     </div>
 
 <script>
-    // 請確保此處為最新的 GAS 部署網址
+    /**
+     * 注意：請務必將此網址替換為您在 Google Apps Script「部署」後取得的 Web App 網址
+     */
     const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyARg5ZDoUF4zQSX9nBVcytl4z8h83CP8hfrPHf70vusnLKCqcaNqagd-smTsiNL9ZP/exec';
 
     let dataList = [];
 
+    /** 格式化日期時間顯示 */
     function formatDate(str) {
-        const d = new Date(str);
-        return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+        try {
+            const d = new Date(str);
+            if (isNaN(d)) return str;
+            return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+        } catch(e) { return str; }
     }
 
+    /** 渲染表格內容 */
     function render() {
         const tbody = document.getElementById('tbody');
+        if (!tbody) return;
+        
         tbody.innerHTML = dataList.length === 0 
             ? '<tr><td colspan="5" class="p-10 text-center text-slate-400">尚無資料，請先讀取或新增</td></tr>' 
             : '';
 
         dataList.forEach(row => {
             const tr = document.createElement('tr');
-            tr.className = row.id.toString().startsWith('temp') ? 'bg-blue-50 animate-pulse' : '';
+            // 如果是臨時生成的 ID（尚未同步至伺服器），顯示動畫效果
+            const isTemp = row.id && row.id.toString().startsWith('temp');
+            tr.className = isTemp ? 'bg-blue-50 animate-pulse' : '';
+            
             tr.innerHTML = `
                 <td class="p-3 text-sm text-slate-500">${formatDate(row.date)}</td>
-                <td class="p-3 font-medium text-slate-700">${row.item}</td>
-                <td class="p-3 text-right text-slate-600">${Number(row.amount).toLocaleString()} ${row.currency}</td>
-                <td class="p-3 text-right font-bold text-blue-600">${Math.round(row.twd).toLocaleString()}</td>
+                <td class="p-3 font-medium text-slate-700">${row.item || ''}</td>
+                <td class="p-3 text-right text-slate-600">${Number(row.amount || 0).toLocaleString()} ${row.currency || ''}</td>
+                <td class="p-3 text-right font-bold text-blue-600">${Math.round(row.twd || 0).toLocaleString()}</td>
                 <td class="p-3 text-center">
                     <button onclick="del('${row.id}')" class="text-red-500 hover:text-red-700 font-medium">刪除</button>
                 </td>
@@ -92,84 +105,117 @@
         });
     }
 
+    /** 從伺服器載入資料 */
     async function load() {
         try {
             const res = await fetch(SCRIPT_URL);
-            dataList = await res.json();
-            render();
+            const json = await res.json();
+            if (Array.isArray(json)) {
+                dataList = json;
+                render();
+            }
         } catch (e) {
-            console.error("載入失敗", e);
+            console.error("載入失敗:", e);
         }
     }
 
+    /** 表單提交處理 */
     document.getElementById('form').onsubmit = async (e) => {
         e.preventDefault();
         const btn = document.getElementById('submitBtn');
+        const itemInput = document.getElementById('item');
+        const amountInput = document.getElementById('amount');
+        const currencyInput = document.getElementById('currency');
+        const dateInput = document.getElementById('date');
+
+        // UI 反饋：按鈕進入處理狀態
         btn.classList.add('loading');
         btn.innerText = '處理中...';
 
         const now = new Date();
-        const dateInput = document.getElementById('date').value;
-        const iso = new Date(`${dateInput}T${now.getHours()}:${now.getMinutes()}:${now.getSeconds()}`).toISOString();
+        // 組合日期與當前時間
+        const iso = new Date(`${dateInput.value}T${now.getHours()}:${now.getMinutes()}:${now.getSeconds()}`).toISOString();
 
         const payload = {
             action: 'ADD',
             date: iso,
-            item: document.getElementById('item').value,
-            amount: document.getElementById('amount').value,
-            currency: document.getElementById('currency').value
+            item: itemInput.value,
+            amount: amountInput.value,
+            currency: currencyInput.value
         };
 
-        // 樂觀更新 (立即顯示)
+        // 樂觀更新：在伺服器回應前先在畫面上顯示預期結果
         const fake = {
             id: 'temp_' + Date.now(),
             date: iso,
             item: payload.item,
             amount: payload.amount,
             currency: payload.currency,
-            twd: payload.currency === 'TWD' ? Number(payload.amount) : Number(payload.amount) * 0.22 // 預估匯率
+            twd: payload.currency === 'JPY' ? Number(payload.amount) * 0.22 : Number(payload.amount) // 預估匯率
         };
         dataList.unshift(fake);
         render();
 
+        // 設置超時保護：如果 10 秒沒回應，強制恢復按鈕狀態
+        const timeoutId = setTimeout(() => {
+            btn.classList.remove('loading');
+            btn.innerText = '新增記錄';
+        }, 10000);
+
         try {
-            // 使用 POST 發送 JSON 字符串
+            // 發送資料到 Google Apps Script
             await fetch(SCRIPT_URL, {
                 method: 'POST',
-                mode: 'no-cors', 
-                cache: 'no-cache',
-                headers: { 'Content-Type': 'application/json' },
+                mode: 'no-cors', // 使用 no-cors 模式
                 body: JSON.stringify(payload)
             });
             
-            // 提交後清除輸入框 (保留日期)
-            document.getElementById('item').value = '';
-            document.getElementById('amount').value = '';
+            // 清空輸入欄位
+            itemInput.value = '';
+            amountInput.value = '';
             
-            // 延遲一點點時間再重新加載最新正確數據（含正確匯率）
-            setTimeout(load, 2000);
+            // 延遲重載最新正確數據（含伺服器端計算的準確匯率與 ID）
+            setTimeout(() => {
+                clearTimeout(timeoutId);
+                btn.classList.remove('loading');
+                btn.innerText = '新增記錄';
+                load();
+            }, 1500);
         } catch (err) {
-            console.error("提交失敗", err);
-        } finally {
+            console.error("提交失敗:", err);
+            clearTimeout(timeoutId);
             btn.classList.remove('loading');
             btn.innerText = '新增記錄';
         }
     };
 
+    /** 刪除功能 */
     async function del(id) {
         if (!confirm('確定要刪除這筆資料嗎？')) return;
+        
+        // 先從畫面移除
         dataList = dataList.filter(d => d.id !== id);
         render();
 
-        await fetch(SCRIPT_URL, {
-            method: 'POST',
-            mode: 'no-cors',
-            body: JSON.stringify({ action: 'DELETE', id: id })
-        });
+        try {
+            await fetch(SCRIPT_URL, {
+                method: 'POST',
+                mode: 'no-cors',
+                body: JSON.stringify({ action: 'DELETE', id: id })
+            });
+            // 稍後刷新列表確保同步
+            setTimeout(load, 1000);
+        } catch(e) {
+            console.error("刪除失敗:", e);
+        }
     }
 
+    /** 初始化 */
     window.onload = () => {
-        document.getElementById('date').valueAsDate = new Date();
+        // 設定預設日期為今天
+        const d = new Date();
+        document.getElementById('date').value = d.toISOString().split('T')[0];
+        // 載入資料
         load();
     };
 </script>
