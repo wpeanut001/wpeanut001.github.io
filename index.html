@@ -43,11 +43,25 @@
         .no-scrollbar::-webkit-scrollbar { display: none; }
         .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
 
-        /* 刪除動畫 */
         .removing {
             transform: translateX(100%);
             opacity: 0;
             transition: all 0.3s ease;
+        }
+
+        .spinner {
+            display: inline-block;
+            width: 1.25rem;
+            height: 1.25rem;
+            border: 3px solid rgba(255,255,255,0.3);
+            border-radius: 50%;
+            border-top-color: #fff;
+            animation: spin 1s ease-in-out infinite;
+            margin-right: 0.5rem;
+            vertical-align: middle;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
         }
     </style>
 </head>
@@ -66,7 +80,7 @@
         <div class="bg-white p-6 rounded-[2rem] shadow-xl shadow-slate-200/50 border border-white">
             <div class="flex items-center justify-between mb-6">
                 <h1 class="text-2xl font-black text-slate-800 tracking-tight">✍️ 快速記帳</h1>
-                <div id="rateStatus" class="text-[10px] font-bold bg-slate-100 text-slate-400 px-3 py-1 rounded-full uppercase">匯率連線中...</div>
+                <div id="rateStatus" class="text-[10px] font-bold bg-slate-100 text-slate-400 px-3 py-1 rounded-full uppercase">匯率讀取中...</div>
             </div>
 
             <form id="payForm" class="space-y-4">
@@ -77,13 +91,11 @@
                 </div>
 
                 <div class="grid grid-cols-12 gap-3">
-                    <!-- 日期選擇 -->
                     <div class="col-span-5 space-y-1">
                         <label class="text-xs font-bold text-slate-400 ml-1 uppercase">日期</label>
                         <input type="date" id="inputDate" required
                             class="w-full bg-slate-50 border-none p-4 rounded-2xl outline-none focus:ring-2 focus:ring-blue-500 text-sm font-bold text-slate-600">
                     </div>
-                    <!-- 幣別 -->
                     <div class="col-span-3 space-y-1">
                         <label class="text-xs font-bold text-slate-400 ml-1 uppercase">幣別</label>
                         <div class="relative">
@@ -96,7 +108,6 @@
                             </div>
                         </div>
                     </div>
-                    <!-- 金額 -->
                     <div class="col-span-4 space-y-1">
                         <label class="text-xs font-bold text-slate-400 ml-1 uppercase">金額</label>
                         <input type="number" id="amount" placeholder="0" step="any" inputmode="decimal" required 
@@ -104,8 +115,8 @@
                     </div>
                 </div>
 
-                <button type="submit" id="submitBtn" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-black py-5 rounded-2xl shadow-lg shadow-blue-200 transition btn-active text-lg mt-2">
-                    確認儲存
+                <button type="submit" id="submitBtn" class="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 disabled:cursor-not-allowed text-white font-black py-5 rounded-2xl shadow-lg shadow-blue-200 transition btn-active text-lg mt-2 flex items-center justify-center">
+                    <span id="btnText">確認儲存</span>
                 </button>
             </form>
         </div>
@@ -120,7 +131,6 @@
                     </button>
                 </div>
 
-                <!-- 列表日期篩選器 -->
                 <div class="grid grid-cols-2 gap-2 mb-4">
                     <div class="space-y-1">
                         <label class="text-[10px] font-bold text-slate-400 uppercase ml-1">開始日期</label>
@@ -132,10 +142,9 @@
                     </div>
                 </div>
 
-                <!-- 統計資訊欄 -->
                 <div class="bg-blue-50 rounded-2xl p-4 flex justify-between items-center border border-blue-100">
                     <div>
-                        <p class="text-[10px] font-bold text-blue-400 uppercase tracking-wider">範圍內總計</p>
+                        <p class="text-[10px] font-bold text-blue-400 uppercase tracking-wider">今日/範圍內總計</p>
                         <p class="text-xs text-blue-500 font-medium mt-0.5" id="totalCount">共 0 筆消費</p>
                     </div>
                     <div class="text-right">
@@ -163,60 +172,78 @@
         let fullData = JSON.parse(localStorage.getItem('travel_records_v3') || '[]');
         let jpyRate = parseFloat(localStorage.getItem('jpy_rate_v3') || '0.215');
 
-        // 初始化所有日期欄位
         function initDateFilters() {
             const now = new Date();
             const todayStr = now.toISOString().split('T')[0];
-            
-            // 表單輸入日期預設今天
             document.getElementById('inputDate').value = todayStr;
-
-            // 篩選日期預設當月
-            const firstDay = new Date(now.getFullYear(), now.getMonth(), 1);
-            const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0);
-            
-            document.getElementById('startDate').value = firstDay.toISOString().split('T')[0];
-            document.getElementById('endDate').value = lastDay.toISOString().split('T')[0];
+            document.getElementById('startDate').value = todayStr;
+            document.getElementById('endDate').value = todayStr;
         }
 
-        // 初始化匯率
+        // 新版匯率初始化邏輯：每日台灣時間 09:00 更新
         async function initRate() {
-            const ts = localStorage.getItem('jpy_rate_ts_v3');
-            const now = Date.now();
+            const now = new Date();
+            // 計算台灣時間 (UTC+8) 的小時
+            const tzOffset = 8;
+            const currentTWHour = now.getUTCHours() + tzOffset;
             
-            if (ts && (now - ts < 3600000)) {
-                updateRateUI(true);
+            // 決定「匯率基準日」
+            // 如果現在台灣時間還沒到 9 點，基準日就是昨天，否則就是今天
+            let baseDate = new Date(now);
+            if (currentTWHour < 9) {
+                baseDate.setDate(baseDate.getDate() - 1);
+            }
+            const dateKey = baseDate.toISOString().split('T')[0]; // 例如 "2023-10-27"
+
+            // 檢查快取中是否有該基準日的匯率
+            const cachedDate = localStorage.getItem('jpy_rate_date_v3');
+            if (cachedDate === dateKey && localStorage.getItem('jpy_rate_v3')) {
+                jpyRate = parseFloat(localStorage.getItem('jpy_rate_v3'));
+                updateRateUI(true, dateKey);
                 return;
             }
 
+            // 若快取過期或不存在，則抓取最新匯率
             try {
+                // 注意：API 抓取的是當下最新匯率，我們將其視為該基準日的固定匯率
                 const res = await fetch("https://open.er-api.com/v6/latest/JPY");
                 const data = await res.json();
                 jpyRate = data.rates.TWD;
+                
                 localStorage.setItem('jpy_rate_v3', jpyRate);
-                localStorage.setItem('jpy_rate_ts_v3', now);
-                updateRateUI(true);
+                localStorage.setItem('jpy_rate_date_v3', dateKey); // 儲存基準日標記
+                updateRateUI(true, dateKey);
             } catch (e) { 
                 updateRateUI(false); 
             }
         }
 
-        function updateRateUI(ok) {
+        function updateRateUI(ok, dateKey) {
             const el = document.getElementById('rateStatus');
             if (el) {
-                el.innerText = ok ? `JPY 匯率: ${jpyRate.toFixed(4)}` : "匯率讀取失敗";
-                el.classList.remove('text-slate-400', 'text-orange-400', 'text-blue-500');
-                el.classList.add(ok ? 'text-blue-500' : 'text-orange-400');
+                if (ok) {
+                    el.innerText = `${dateKey} 匯率: ${jpyRate.toFixed(4)}`;
+                    el.classList.remove('text-slate-400', 'text-orange-400');
+                    el.classList.add('text-blue-500');
+                } else {
+                    el.innerText = "匯率連線失敗";
+                    el.classList.add('text-orange-400');
+                }
             }
         }
 
-        // 提交表單
         document.getElementById('payForm').onsubmit = async (e) => {
             e.preventDefault();
             if (!SCRIPT_URL) { 
                 alert("⚠️ 請先在代碼中填寫 SCRIPT_URL (GAS 部署網址)"); 
                 return; 
             }
+
+            const submitBtn = document.getElementById('submitBtn');
+            const btnText = document.getElementById('btnText');
+            
+            submitBtn.disabled = true;
+            btnText.innerHTML = `<span class="spinner"></span> 處理中...`;
 
             const item = document.getElementById('item').value;
             const amount = parseFloat(document.getElementById('amount').value);
@@ -231,18 +258,16 @@
                 amount, 
                 currency, 
                 twd: twdEstimate,
-                // 如果選的是今天，保留具體時分秒，否則用選定日期的午夜時間
                 date: (selectedDate === new Date().toISOString().split('T')[0]) ? new Date().toISOString() : new Date(selectedDate).toISOString(), 
                 optimistic: true
             };
 
             fullData.unshift(optimisticItem);
-            // 提交後按日期重新排序，確保顯示正確
             fullData.sort((a, b) => new Date(b.date) - new Date(a.date));
-            render(fullData);
             
             document.getElementById('payForm').reset();
-            initDateFilters(); // 重設日期為今天
+            initDateFilters(); 
+            render(fullData);
             document.getElementById('item').focus();
 
             try {
@@ -256,27 +281,31 @@
                         amount, 
                         currency, 
                         twd: twdEstimate,
-                        date: selectedDate // 傳送選定日期給 GAS
+                        date: selectedDate 
                     })
                 });
                 
-                setTimeout(fetchData, 2000); 
+                setTimeout(() => {
+                    submitBtn.disabled = false;
+                    btnText.innerText = '確認儲存';
+                    fetchData(); 
+                }, 800);
+
             } catch (error) {
                 console.error("提交失敗", error);
+                submitBtn.disabled = false;
+                btnText.innerText = '確認儲存';
                 alert("網絡異常，紀錄可能未同步到雲端");
                 fetchData(); 
             }
         };
 
-        // 抓取資料
         async function fetchData() {
             if (!SCRIPT_URL) {
                 render(fullData); 
                 return;
             }
-
             if (fullData.length === 0) document.body.classList.add('is-loading');
-
             try {
                 const res = await fetch(SCRIPT_URL);
                 const data = await res.json();
@@ -292,7 +321,6 @@
             }
         }
 
-        // 渲染列表與統計
         function render(items) {
             const listBody = document.getElementById('listBody');
             const totalCountEl = document.getElementById('totalCount');
@@ -301,17 +329,14 @@
             const startVal = document.getElementById('startDate').value;
             const endVal = document.getElementById('endDate').value;
             
-            // 轉化為時間戳進行比較
             const startTime = startVal ? new Date(startVal + 'T00:00:00').getTime() : 0;
             const endTime = endVal ? new Date(endVal + 'T23:59:59').getTime() : Infinity;
 
-            // 日期範圍過濾
             let filteredItems = items.filter(i => {
                 const recordTime = new Date(i.date).getTime();
                 return recordTime >= startTime && recordTime <= endTime;
             });
 
-            // 計算總計
             const totalSum = filteredItems.reduce((sum, i) => sum + (Number(i.twd) || 0), 0);
             totalCountEl.innerText = `共 ${filteredItems.length} 筆消費`;
             totalAmountEl.innerText = `NT$ ${totalSum.toLocaleString()}`;
@@ -349,18 +374,14 @@
             `).join('');
         }
 
-        // 刪除項目
         async function deleteItem(id) {
             if (!confirm('要刪除這筆紀錄嗎？')) return;
-            
             const row = document.getElementById(`row-${id}`);
             if (row) row.classList.add('removing');
-
             setTimeout(async () => {
                 fullData = fullData.filter(i => i.id !== id);
                 localStorage.setItem('travel_records_v3', JSON.stringify(fullData));
                 render(fullData);
-
                 try {
                     await fetch(SCRIPT_URL, { 
                         method: 'POST', 
@@ -374,7 +395,6 @@
             }, 300);
         }
 
-        // 日期格式化
         function formatDate(dStr) {
             const d = new Date(dStr);
             if (isNaN(d)) return dStr;
