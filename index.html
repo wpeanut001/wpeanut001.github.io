@@ -1,340 +1,179 @@
 <!DOCTYPE html>
-<html lang="zh-Hant">
+<html>
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>旅遊記帳本 - 格式統一版</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <style>
-        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&display=swap');
-        body { font-family: 'Noto Sans TC', sans-serif; -webkit-tap-highlight-color: transparent; }
-        .loading-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(255,255,255,0.7); z-index: 100; justify-content: center; align-items: center; backdrop-filter: blur(5px); }
-        body.is-loading .loading-overlay { display: flex; }
-        .optimistic-item { opacity: 0.6; border-left: 4px solid #3b82f6; background-color: #f0f7ff; animation: pulse 2s infinite; }
-        @keyframes pulse { 0% { opacity: 0.6; } 50% { opacity: 0.4; } 100% { opacity: 0.6; } }
-        .btn-active:active { transform: scale(0.96); }
-        .no-scrollbar::-webkit-scrollbar { display: none; }
-        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
-        .spinner { display: inline-block; width: 1.25rem; height: 1.25rem; border: 3px solid rgba(255,255,255,0.3); border-radius: 50%; border-top-color: #fff; animation: spin 1s ease-in-out infinite; margin-right: 0.5rem; vertical-align: middle; }
-        @keyframes spin { to { transform: rotate(360deg); } }
-    </style>
+<meta charset="UTF-8">
+<title>記帳系統</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+
+<style>
+body {
+  font-family: Arial;
+  padding: 15px;
+  max-width: 600px;
+  margin: auto;
+}
+
+h2, h3 {
+  text-align: center;
+}
+
+input, select, button {
+  width: 100%;
+  margin: 5px 0;
+  padding: 10px;
+  font-size: 16px;
+}
+
+button {
+  background-color: #4CAF50;
+  color: white;
+  border: none;
+}
+
+#rateBox {
+  background: #f5f5f5;
+  padding: 10px;
+  text-align: center;
+  border-radius: 8px;
+  margin-bottom: 10px;
+}
+
+table {
+  border-collapse: collapse;
+  margin-top: 15px;
+  width: 100%;
+  font-size: 14px;
+}
+
+td, th {
+  border: 1px solid #ccc;
+  padding: 6px;
+  text-align: center;
+}
+</style>
 </head>
-<body class="bg-slate-50 min-h-screen pb-10">
 
-    <div id="loader" class="loading-overlay">
-        <div class="flex flex-col items-center">
-            <div class="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mb-4"></div>
-            <p class="font-bold text-slate-500">同步雲端資料...</p>
-        </div>
-    </div>
+<body>
 
-    <div class="max-w-xl mx-auto px-4 pt-6 space-y-6">
-        <!-- 輸入表單 -->
-        <div class="bg-white p-6 rounded-[2rem] shadow-xl shadow-slate-200/50 border border-white">
-            <div class="flex items-center justify-between mb-6">
-                <h1 class="text-2xl font-black text-slate-800 tracking-tight">✍️ 快速記帳</h1>
-                <div id="rateStatus" class="text-[10px] font-bold bg-slate-100 text-slate-400 px-3 py-1 rounded-full uppercase">匯率讀取中...</div>
-            </div>
+<h2>💰 記帳系統</h2>
 
-            <form id="payForm" class="space-y-4">
-                <div class="space-y-1">
-                    <label class="text-xs font-bold text-slate-400 ml-1 uppercase">消費項目</label>
-                    <input type="text" id="item" placeholder="例如：藥妝、拉麵..." required 
-                        class="w-full bg-slate-50 border-none p-4 rounded-2xl outline-none focus:ring-2 focus:ring-blue-500 transition text-lg font-medium text-slate-700">
-                </div>
+<div id="rateBox">📈 匯率載入中...</div>
 
-                <div class="grid grid-cols-12 gap-3">
-                    <div class="col-span-5 space-y-1">
-                        <label class="text-xs font-bold text-slate-400 ml-1 uppercase">日期</label>
-                        <input type="date" id="inputDate" required class="w-full bg-slate-50 border-none p-4 rounded-2xl outline-none focus:ring-2 focus:ring-blue-500 text-sm font-bold text-slate-600">
-                    </div>
-                    <div class="col-span-3 space-y-1">
-                        <label class="text-xs font-bold text-slate-400 ml-1 uppercase">幣別</label>
-                        <select id="currency" class="w-full bg-slate-50 p-4 rounded-2xl outline-none focus:ring-2 focus:ring-blue-500 font-bold text-slate-600 text-sm">
-                            <option value="JPY">JPY</option>
-                            <option value="TWD">TWD</option>
-                        </select>
-                    </div>
-                    <div class="col-span-4 space-y-1">
-                        <label class="text-xs font-bold text-slate-400 ml-1 uppercase">金額</label>
-                        <input type="number" id="amount" placeholder="0" step="any" inputmode="decimal" required 
-                            class="w-full bg-slate-50 border-none p-4 rounded-2xl outline-none focus:ring-2 focus:ring-blue-500 text-lg font-mono font-bold text-slate-700">
-                    </div>
-                </div>
+<label>日期</label>
+<input type="date" id="date">
 
-                <button type="submit" id="submitBtn" class="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white font-black py-5 rounded-2xl shadow-lg transition btn-active text-lg mt-2 flex items-center justify-center">
-                    <span id="btnText">確認儲存</span>
-                </button>
-            </form>
-        </div>
+<label>項目</label>
+<input type="text" id="item" placeholder="例如：午餐">
 
-        <!-- 紀錄列表 -->
-        <div class="bg-white rounded-[2rem] shadow-xl shadow-slate-200/50 overflow-hidden border border-white">
-            <div class="p-6 border-b border-slate-50">
-                <div class="flex justify-between items-center mb-4">
-                    <h2 class="font-black text-slate-700 text-lg">📊 消費紀錄</h2>
-                    <button onclick="fetchData()" class="p-2 bg-slate-50 rounded-xl hover:bg-slate-100 transition btn-active">
-                        <svg class="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"></path></svg>
-                    </button>
-                </div>
+<label>幣別</label>
+<select id="currency">
+  <option value="TWD">TWD</option>
+  <option value="JPY">JPY</option>
+</select>
 
-                <div class="grid grid-cols-2 gap-2 mb-4">
-                    <div class="space-y-1">
-                        <label class="text-[10px] font-bold text-slate-400 uppercase ml-1">開始日期</label>
-                        <input type="date" id="startDate" onchange="render(fullData)" class="w-full bg-slate-50 p-2 rounded-xl text-xs font-bold text-slate-600 outline-none border-none focus:ring-1 focus:ring-blue-400">
-                    </div>
-                    <div class="space-y-1">
-                        <label class="text-[10px] font-bold text-slate-400 uppercase ml-1">結束日期</label>
-                        <input type="date" id="endDate" onchange="render(fullData)" class="w-full bg-slate-50 p-2 rounded-xl text-xs font-bold text-slate-600 outline-none border-none focus:ring-1 focus:ring-blue-400">
-                    </div>
-                </div>
+<label>金額</label>
+<input type="number" id="amount" placeholder="輸入金額">
 
-                <div class="bg-blue-50 rounded-2xl p-4 flex justify-between items-center border border-blue-100">
-                    <div>
-                        <p class="text-[10px] font-bold text-blue-400 uppercase tracking-wider">總計 (所選範圍)</p>
-                        <p class="text-xs text-blue-500 font-medium mt-0.5" id="totalCount">共 0 筆消費</p>
-                    </div>
-                    <div class="text-right">
-                        <p class="text-2xl font-black text-blue-600 tracking-tight" id="totalAmount">NT$ 0</p>
-                    </div>
-                </div>
-            </div>
+<button onclick="submitData()">送出記帳</button>
 
-            <div class="max-h-[60vh] overflow-y-auto no-scrollbar">
-                <table class="w-full text-left border-collapse">
-                    <tbody id="listBody" class="divide-y divide-slate-50"></tbody>
-                </table>
-            </div>
-        </div>
-    </div>
+<hr>
 
-    <script>
-        // ⚠️ 請填入您的 GAS 部署網址
-        const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyARg5ZDoUF4zQSX9nBVcytl4z8h83CP8hfrPHf70vusnLKCqcaNqagd-smTsiNL9ZP/exec'; 
+<h3>📊 消費紀錄</h3>
 
-        let fullData = JSON.parse(localStorage.getItem('travel_records_v3') || '[]');
-        let jpyRate = parseFloat(localStorage.getItem('jpy_rate_v3') || '0.215');
+<label>開始日期</label>
+<input type="date" id="start">
 
-        function getTaiwanTodayStr() {
-            return new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Taipei' }); 
-        }
+<label>結束日期</label>
+<input type="date" id="end">
 
-        // 強效日期解析函式：確保無論雲端字串格式如何，都能轉成正確的 Date 物件
-        function parseAnyDate(dStr) {
-            if (!dStr) return new Date();
-            
-            // 如果已經是有效的 Date 字串（如 ISO 格式）
-            let d = new Date(dStr);
-            if (!isNaN(d.getTime())) return d;
+<button onclick="loadData()">查詢</button>
 
-            try {
-                // 處理常見的中文字元與斜線
-                let cleanStr = String(dStr)
-                    .replace(/\//g, '-')
-                    .replace('下午', ' ')
-                    .replace('上午', ' ')
-                    .trim();
-                
-                // 嘗試處理 "2024-3-31 14:00:00" 這種格式
-                if (cleanStr.includes(' ')) {
-                    let parts = cleanStr.split(' ');
-                    let dateParts = parts[0].split('-');
-                    let timeParts = parts[1].split(':');
-                    
-                    // 手動構造日期以避免瀏覽器解析差異
-                    d = new Date(
-                        parseInt(dateParts[0]),
-                        parseInt(dateParts[1]) - 1,
-                        parseInt(dateParts[2]),
-                        parseInt(timeParts[0] || 0),
-                        parseInt(timeParts[1] || 0),
-                        parseInt(timeParts[2] || 0)
-                    );
-                } else {
-                    d = new Date(cleanStr);
-                }
-            } catch (e) {
-                return new Date();
-            }
-            return isNaN(d.getTime()) ? new Date() : d;
-        }
+<table>
+<thead>
+<tr>
+<th>日期</th>
+<th>項目</th>
+<th>原始金額</th>
+<th>TWD</th>
+</tr>
+</thead>
+<tbody id="tableBody"></tbody>
+</table>
 
-        // 統一格式化日期顯示為 MM/DD HH:mm
-        function formatDate(dStr) {
-            const d = parseAnyDate(dStr);
-            const mm = String(d.getMonth() + 1).padStart(2, '0');
-            const dd = String(d.getDate()).padStart(2, '0');
-            const hh = String(d.getHours()).padStart(2, '0');
-            const min = String(d.getMinutes()).padStart(2, '0');
-            return `${mm}/${dd} ${hh}:${min}`;
-        }
+<script>
+const GAS_URL = "https://script.google.com/macros/s/AKfycbyARg5ZDoUF4zQSX9nBVcytl4z8h83CP8hfrPHf70vusnLKCqcaNqagd-smTsiNL9ZP/exec"; // 🔥 改這裡
 
-        function initDateFilters() {
-            const todayStr = getTaiwanTodayStr();
-            document.getElementById('inputDate').value = todayStr;
-            document.getElementById('startDate').value = todayStr;
-            document.getElementById('endDate').value = todayStr;
-        }
+// ✅ 送出記帳
+function submitData() {
+  const data = {
+    date: document.getElementById("date").value,
+    item: document.getElementById("item").value,
+    currency: document.getElementById("currency").value,
+    amount: Number(document.getElementById("amount").value)
+  };
 
-        async function initRate() {
-            try {
-                const res = await fetch("https://open.er-api.com/v6/latest/JPY");
-                const data = await res.json();
-                jpyRate = data.rates.TWD;
-                localStorage.setItem('jpy_rate_v3', jpyRate);
-                document.getElementById('rateStatus').innerText = `匯率: ${jpyRate.toFixed(4)}`;
-                document.getElementById('rateStatus').classList.replace('text-slate-400', 'text-blue-500');
-            } catch (e) {
-                document.getElementById('rateStatus').innerText = "匯率載入失敗";
-            }
-        }
+  if (!data.date || !data.item || !data.amount) {
+    alert("請填寫完整資料！");
+    return;
+  }
 
-        document.getElementById('payForm').onsubmit = async (e) => {
-            e.preventDefault();
-            if (!SCRIPT_URL) { alert("請先設定 SCRIPT_URL"); return; }
+  fetch(GAS_URL, {
+    method: "POST",
+    body: JSON.stringify(data)
+  })
+  .then(res => res.json())
+  .then(() => {
+    alert("✅ 記帳成功！");
+    loadData();
+  })
+  .catch(() => {
+    alert("❌ 發生錯誤");
+  });
+}
 
-            const submitBtn = document.getElementById('submitBtn');
-            const btnText = document.getElementById('btnText');
-            submitBtn.disabled = true;
-            btnText.innerHTML = `<span class="spinner"></span> 處理中...`;
+// ✅ 載入資料 + 匯率
+function loadData() {
+  let start = document.getElementById("start").value;
+  let end = document.getElementById("end").value;
 
-            const item = document.getElementById('item').value;
-            const amount = parseFloat(document.getElementById('amount').value);
-            const currency = document.getElementById('currency').value;
-            const selectedDate = document.getElementById('inputDate').value; 
-            const twdEstimate = currency === 'JPY' ? Math.round(amount * jpyRate) : amount;
-            
-            const now = new Date();
-            const timeStr = now.toTimeString().split(' ')[0]; 
-            const finalTimestamp = new Date(`${selectedDate}T${timeStr}`).toISOString();
+  let url = GAS_URL + "?start=" + start + "&end=" + end;
 
-            const optimisticId = 'temp-' + Date.now();
-            const optimisticItem = { 
-                id: optimisticId, 
-                item: item, 
-                amount: amount, 
-                currency: currency, 
-                twd: twdEstimate, 
-                date: finalTimestamp, 
-                optimistic: true 
-            };
+  fetch(url)
+    .then(res => res.json())
+    .then(data => {
 
-            fullData.unshift(optimisticItem);
-            fullData.sort((a, b) => parseAnyDate(b.date) - parseAnyDate(a.date));
-            
-            document.getElementById('startDate').value = selectedDate;
-            document.getElementById('endDate').value = selectedDate;
-            render(fullData);
+      // 📈 顯示前一天匯率
+      document.getElementById("rateBox").innerHTML =
+        `📈 匯率（${data.rateDate}）：1 JPY = ${data.rate.toFixed(3)} TWD`;
 
-            try {
-                await fetch(SCRIPT_URL, {
-                    method: 'POST',
-                    mode: 'no-cors',
-                    body: JSON.stringify({ 
-                        action: 'ADD', 
-                        item, 
-                        amount, 
-                        currency, 
-                        twd: twdEstimate, 
-                        date: finalTimestamp, 
-                        id: optimisticId 
-                    })
-                });
-                document.getElementById('item').value = '';
-                document.getElementById('amount').value = '';
-                setTimeout(() => {
-                    submitBtn.disabled = false;
-                    btnText.innerText = '確認儲存';
-                    fetchData(); 
-                }, 1500);
-            } catch (error) {
-                submitBtn.disabled = false;
-                btnText.innerText = '確認儲存';
-                fetchData(); 
-            }
-        };
+      let html = "";
 
-        async function fetchData() {
-            if (!SCRIPT_URL) return;
-            try {
-                const res = await fetch(SCRIPT_URL);
-                const data = await res.json();
-                if (Array.isArray(data)) {
-                    fullData = data;
-                    localStorage.setItem('travel_records_v3', JSON.stringify(fullData));
-                    render(fullData);
-                }
-            } catch (e) { 
-                render(fullData); 
-            }
-        }
+      data.records.forEach(row => {
+        html += `
+          <tr>
+            <td>${row.date}</td>
+            <td>${row.item}</td>
+            <td>${row.amount} ${row.currency}</td>
+            <td>${row.twd}</td>
+          </tr>
+        `;
+      });
 
-        function render(items) {
-            const listBody = document.getElementById('listBody');
-            const startVal = document.getElementById('startDate').value;
-            const endVal = document.getElementById('endDate').value;
-            
-            const startTime = startVal ? new Date(startVal + 'T00:00:00').getTime() : 0;
-            const endTime = endVal ? new Date(endVal + 'T23:59:59').getTime() : Infinity;
+      document.getElementById("tableBody").innerHTML = html;
+    });
+}
 
-            let filteredItems = items.filter(i => {
-                let rawDate = i.date || i.Date || i.timestamp;
-                let t = parseAnyDate(rawDate).getTime();
-                return t >= startTime && t <= endTime;
-            });
+// ✅ 預設今天
+window.onload = () => {
+  let today = new Date().toISOString().split("T")[0];
 
-            const totalSum = filteredItems.reduce((sum, i) => {
-                let val = i.twd || i.TWD || 0;
-                return sum + (Number(val) || 0);
-            }, 0);
+  document.getElementById("date").value = today;
+  document.getElementById("start").value = today;
+  document.getElementById("end").value = today;
 
-            document.getElementById('totalCount').innerText = `共 ${filteredItems.length} 筆消費`;
-            document.getElementById('totalAmount').innerText = `NT$ ${totalSum.toLocaleString()}`;
+  loadData();
+};
+</script>
 
-            if (filteredItems.length === 0) {
-                listBody.innerHTML = '<tr><td class="p-20 text-center text-slate-300 italic">無紀錄 (請檢查日期篩選)</td></tr>';
-                return;
-            }
-
-            listBody.innerHTML = filteredItems.map(i => {
-                const displayItem = i.item || i.Item || '未命名項目';
-                const displayAmount = i.amount || i.Amount || 0;
-                const displayCurrency = i.currency || i.Currency || '';
-                const displayTwd = i.twd || i.TWD || 0;
-                const displayDate = i.date || i.Date || new Date().toISOString();
-                const displayId = i.id || i.ID || '';
-
-                return `
-                <tr id="row-${displayId}" class="${i.optimistic ? 'optimistic-item' : ''}">
-                    <td class="px-6 py-5">
-                        <div class="font-bold text-slate-800 text-base">${displayItem}</div>
-                        <div class="text-[10px] text-slate-400 font-bold mt-1 tracking-wider uppercase">
-                            ${formatDate(displayDate)} • ${Number(displayAmount).toLocaleString()} ${displayCurrency}
-                        </div>
-                    </td>
-                    <td class="px-6 py-5 text-right font-black text-blue-600 text-xl">
-                        <span class="text-xs mr-0.5">NT$</span>${Math.round(displayTwd).toLocaleString()}
-                    </td>
-                    <td class="px-4 py-5 text-right w-10">
-                        ${i.optimistic ? `<div class="w-4 h-4 border-2 border-t-blue-500 rounded-full animate-spin ml-auto"></div>` : 
-                        `<button onclick="deleteItem('${displayId}')" class="text-slate-200 hover:text-red-400 p-2 transition">✕</button>`}
-                    </td>
-                </tr>
-                `;
-            }).join('');
-        }
-
-        async function deleteItem(id) {
-            if (!confirm('要刪除這筆紀錄嗎？')) return;
-            fullData = fullData.filter(i => (i.id || i.ID) !== id);
-            localStorage.setItem('travel_records_v3', JSON.stringify(fullData));
-            render(fullData);
-            try {
-                await fetch(SCRIPT_URL, { method: 'POST', mode: 'no-cors', body: JSON.stringify({ action: 'DELETE', id: id }) });
-            } catch(e) { fetchData(); }
-        }
-
-        window.onload = () => { initDateFilters(); initRate(); fetchData(); };
-    </script>
 </body>
 </html>
