@@ -164,12 +164,11 @@
     </div>
 
     <script>
-        const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyARg5ZDoUF4zQSX9nBVcytl4z8h83CP8hfrPHf70vusnLKCqcaNqagd-smTsiNL9ZP/exec'; 
+        const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyARg5ZDoUF4zQSX9nBVcytl4z8h83CP8hfrPHf70vusnLKCqcaNqagd-smTsiNL9ZP/exec'; // ⚠️ 請在此處填入您的 GAS 部署網址
 
         let fullData = JSON.parse(localStorage.getItem('travel_records_v3') || '[]');
         let jpyRate = parseFloat(localStorage.getItem('jpy_rate_v3') || '0.215');
 
-        // 取得台灣時區的 YYYY-MM-DD
         function getTaiwanTodayStr() {
             return new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Taipei' }); 
         }
@@ -185,10 +184,8 @@
             const now = new Date();
             const tzOffset = 8;
             const currentTWHour = now.getUTCHours() + tzOffset;
-            
             let baseDate = new Date(now);
             if (currentTWHour < 9) baseDate.setDate(baseDate.getDate() - 1);
-            
             const dateKey = baseDate.toLocaleDateString('en-CA', { timeZone: 'Asia/Taipei' });
 
             const cachedDate = localStorage.getItem('jpy_rate_date_v3');
@@ -238,28 +235,29 @@
             
             const todayStr = getTaiwanTodayStr();
             
-            // 核心邏輯：判斷日期並決定時間戳
             let finalTimestamp;
             if (selectedDate === todayStr) {
-                // 今天：記錄當下秒數
+                // 如果是今天，保留精確時間戳
                 finalTimestamp = new Date().toISOString();
             } else {
-                // 過去的日期：固定 21:00 (台北時間)
-                // 必須使用 T21:00:00+08:00 強制指定台北時區
+                // 如果是過去日期，強制設定為該日 21:00 (台北時間)
+                // 這樣 GAS 接收到的 date 參數就會是晚上九點
                 finalTimestamp = new Date(`${selectedDate}T21:00:00+08:00`).toISOString();
             }
 
+            const optimisticId = 'temp-' + Date.now();
             const optimisticItem = {
-                id: 'temp-' + Date.now(), 
+                id: optimisticId, 
                 item, amount, currency, twd: twdEstimate,
                 date: finalTimestamp, 
                 optimistic: true
             };
 
+            // 先更新本地 UI
             fullData.unshift(optimisticItem);
             fullData.sort((a, b) => new Date(b.date) - new Date(a.date));
             
-            // 重要：為了讓使用者看到補錄的資料，自動調整篩選範圍
+            // 自動切換篩選器到該日期
             document.getElementById('startDate').value = selectedDate;
             document.getElementById('endDate').value = selectedDate;
 
@@ -269,29 +267,35 @@
             document.getElementById('item').focus();
 
             try {
+                // 將 date 參數傳送至 GAS
                 await fetch(SCRIPT_URL, {
                     method: 'POST',
                     mode: 'no-cors',
                     body: JSON.stringify({ 
-                        action: 'ADD', item, amount, currency, twd: twdEstimate, date: finalTimestamp 
+                        action: 'ADD', 
+                        item, 
+                        amount, 
+                        currency, 
+                        twd: twdEstimate, 
+                        date: finalTimestamp, 
+                        id: optimisticId
                     })
                 });
+                // 延遲刷新以確保雲端已寫入
                 setTimeout(() => {
                     submitBtn.disabled = false;
                     btnText.innerText = '確認儲存';
                     fetchData(); 
-                }, 800);
+                }, 1000);
             } catch (error) {
                 submitBtn.disabled = false;
                 btnText.innerText = '確認儲存';
-                alert("網路異常，已儲存於本地");
                 fetchData(); 
             }
         };
 
         async function fetchData() {
             if (!SCRIPT_URL) { render(fullData); return; }
-            if (fullData.length === 0) document.body.classList.add('is-loading');
             try {
                 const res = await fetch(SCRIPT_URL);
                 const data = await res.json();
@@ -300,7 +304,12 @@
                     localStorage.setItem('travel_records_v3', JSON.stringify(fullData));
                     render(fullData);
                 }
-            } catch (e) { console.error(e); } finally { document.body.classList.remove('is-loading'); }
+            } catch (e) { 
+                console.error(e);
+                render(fullData);
+            } finally { 
+                document.body.classList.remove('is-loading'); 
+            }
         }
 
         function render(items) {
@@ -311,7 +320,6 @@
             const startVal = document.getElementById('startDate').value;
             const endVal = document.getElementById('endDate').value;
             
-            // 轉換篩選時間戳
             const startTime = startVal ? new Date(startVal + 'T00:00:00+08:00').getTime() : 0;
             const endTime = endVal ? new Date(endVal + 'T23:59:59+08:00').getTime() : Infinity;
 
@@ -325,7 +333,7 @@
             totalAmountEl.innerText = `NT$ ${totalSum.toLocaleString()}`;
 
             if (filteredItems.length === 0) {
-                listBody.innerHTML = '<tr><td class="p-20 text-center text-slate-300 italic font-medium">此範圍內沒有紀錄</td></tr>';
+                listBody.innerHTML = '<tr><td class="p-20 text-center text-slate-300 italic font-medium">無紀錄</td></tr>';
                 return;
             }
 
@@ -368,7 +376,6 @@
         function formatDate(dStr) {
             const d = new Date(dStr);
             if (isNaN(d)) return dStr;
-            // 使用台北時區顯示
             const month = d.toLocaleString('zh-TW', { month: 'numeric', timeZone: 'Asia/Taipei' });
             const day = d.toLocaleString('zh-TW', { day: 'numeric', timeZone: 'Asia/Taipei' });
             const time = d.toLocaleString('zh-TW', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Asia/Taipei' });
