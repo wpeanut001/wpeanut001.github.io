@@ -76,23 +76,31 @@
                         class="w-full bg-slate-50 border-none p-4 rounded-2xl outline-none focus:ring-2 focus:ring-blue-500 transition text-lg font-medium text-slate-700">
                 </div>
 
-                <div class="grid grid-cols-5 gap-3">
-                    <div class="col-span-2 space-y-1">
+                <div class="grid grid-cols-12 gap-3">
+                    <!-- 日期選擇 -->
+                    <div class="col-span-5 space-y-1">
+                        <label class="text-xs font-bold text-slate-400 ml-1 uppercase">日期</label>
+                        <input type="date" id="inputDate" required
+                            class="w-full bg-slate-50 border-none p-4 rounded-2xl outline-none focus:ring-2 focus:ring-blue-500 text-sm font-bold text-slate-600">
+                    </div>
+                    <!-- 幣別 -->
+                    <div class="col-span-3 space-y-1">
                         <label class="text-xs font-bold text-slate-400 ml-1 uppercase">幣別</label>
                         <div class="relative">
-                            <select id="currency" class="w-full bg-slate-50 p-4 rounded-2xl outline-none focus:ring-2 focus:ring-blue-500 font-bold text-slate-600 appearance-none">
-                                <option value="JPY">🇯🇵 JPY</option>
-                                <option value="TWD">🇹🇼 TWD</option>
+                            <select id="currency" class="w-full bg-slate-50 p-4 rounded-2xl outline-none focus:ring-2 focus:ring-blue-500 font-bold text-slate-600 appearance-none text-sm">
+                                <option value="JPY">JPY</option>
+                                <option value="TWD">TWD</option>
                             </select>
-                            <div class="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400">
-                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M19 9l-7 7-7-7" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+                            <div class="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400">
+                                <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M19 9l-7 7-7-7" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"></path></svg>
                             </div>
                         </div>
                     </div>
-                    <div class="col-span-3 space-y-1">
+                    <!-- 金額 -->
+                    <div class="col-span-4 space-y-1">
                         <label class="text-xs font-bold text-slate-400 ml-1 uppercase">金額</label>
                         <input type="number" id="amount" placeholder="0" step="any" inputmode="decimal" required 
-                            class="w-full bg-slate-50 border-none p-4 rounded-2xl outline-none focus:ring-2 focus:ring-blue-500 text-xl font-mono font-bold text-slate-700">
+                            class="w-full bg-slate-50 border-none p-4 rounded-2xl outline-none focus:ring-2 focus:ring-blue-500 text-lg font-mono font-bold text-slate-700">
                     </div>
                 </div>
 
@@ -112,7 +120,7 @@
                     </button>
                 </div>
 
-                <!-- 日期篩選器 -->
+                <!-- 列表日期篩選器 -->
                 <div class="grid grid-cols-2 gap-2 mb-4">
                     <div class="space-y-1">
                         <label class="text-[10px] font-bold text-slate-400 uppercase ml-1">開始日期</label>
@@ -155,9 +163,15 @@
         let fullData = JSON.parse(localStorage.getItem('travel_records_v3') || '[]');
         let jpyRate = parseFloat(localStorage.getItem('jpy_rate_v3') || '0.215');
 
-        // 初始化日期範圍 (預設當月)
+        // 初始化所有日期欄位
         function initDateFilters() {
             const now = new Date();
+            const todayStr = now.toISOString().split('T')[0];
+            
+            // 表單輸入日期預設今天
+            document.getElementById('inputDate').value = todayStr;
+
+            // 篩選日期預設當月
             const firstDay = new Date(now.getFullYear(), now.getMonth(), 1);
             const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0);
             
@@ -207,6 +221,7 @@
             const item = document.getElementById('item').value;
             const amount = parseFloat(document.getElementById('amount').value);
             const currency = document.getElementById('currency').value;
+            const selectedDate = document.getElementById('inputDate').value;
             const twdEstimate = currency === 'JPY' ? Math.round(amount * jpyRate) : amount;
             
             const tempId = 'temp-' + Date.now();
@@ -216,14 +231,18 @@
                 amount, 
                 currency, 
                 twd: twdEstimate,
-                date: new Date().toISOString(), 
+                // 如果選的是今天，保留具體時分秒，否則用選定日期的午夜時間
+                date: (selectedDate === new Date().toISOString().split('T')[0]) ? new Date().toISOString() : new Date(selectedDate).toISOString(), 
                 optimistic: true
             };
 
             fullData.unshift(optimisticItem);
+            // 提交後按日期重新排序，確保顯示正確
+            fullData.sort((a, b) => new Date(b.date) - new Date(a.date));
             render(fullData);
             
             document.getElementById('payForm').reset();
+            initDateFilters(); // 重設日期為今天
             document.getElementById('item').focus();
 
             try {
@@ -231,7 +250,14 @@
                     method: 'POST',
                     mode: 'no-cors',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ action: 'ADD', item, amount, currency, twd: twdEstimate })
+                    body: JSON.stringify({ 
+                        action: 'ADD', 
+                        item, 
+                        amount, 
+                        currency, 
+                        twd: twdEstimate,
+                        date: selectedDate // 傳送選定日期給 GAS
+                    })
                 });
                 
                 setTimeout(fetchData, 2000); 
