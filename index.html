@@ -164,39 +164,32 @@
     </div>
 
     <script>
-        // ----------------------------------------------------
-        // 請在此填入您的 Google Apps Script 部署 URL
-        // ----------------------------------------------------
         const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyARg5ZDoUF4zQSX9nBVcytl4z8h83CP8hfrPHf70vusnLKCqcaNqagd-smTsiNL9ZP/exec'; 
 
         let fullData = JSON.parse(localStorage.getItem('travel_records_v3') || '[]');
         let jpyRate = parseFloat(localStorage.getItem('jpy_rate_v3') || '0.215');
 
-        // 取得台灣當前日期 YYYY-MM-DD
-        function getTaiwanToday() {
-            const now = new Date();
-            const twDate = now.toLocaleDateString('zh-TW', { year: 'numeric', month: '2-digit', day: '2-digit', timeZone: 'Asia/Taipei' });
-            return twDate.replace(/\//g, '-');
+        // 取得台灣時區的 YYYY-MM-DD
+        function getTaiwanTodayStr() {
+            return new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Taipei' }); 
         }
 
         function initDateFilters() {
-            const todayStr = getTaiwanToday();
+            const todayStr = getTaiwanTodayStr();
             document.getElementById('inputDate').value = todayStr;
             document.getElementById('startDate').value = todayStr;
             document.getElementById('endDate').value = todayStr;
         }
 
-        // 新版匯率初始化邏輯：每日台灣時間 09:00 更新
         async function initRate() {
             const now = new Date();
             const tzOffset = 8;
             const currentTWHour = now.getUTCHours() + tzOffset;
             
             let baseDate = new Date(now);
-            if (currentTWHour < 9) {
-                baseDate.setDate(baseDate.getDate() - 1);
-            }
-            const dateKey = baseDate.toLocaleDateString('zh-TW', { year: 'numeric', month: '2-digit', day: '2-digit', timeZone: 'Asia/Taipei' }).replace(/\//g, '-');
+            if (currentTWHour < 9) baseDate.setDate(baseDate.getDate() - 1);
+            
+            const dateKey = baseDate.toLocaleDateString('en-CA', { timeZone: 'Asia/Taipei' });
 
             const cachedDate = localStorage.getItem('jpy_rate_date_v3');
             if (cachedDate === dateKey && localStorage.getItem('jpy_rate_v3')) {
@@ -209,13 +202,10 @@
                 const res = await fetch("https://open.er-api.com/v6/latest/JPY");
                 const data = await res.json();
                 jpyRate = data.rates.TWD;
-                
                 localStorage.setItem('jpy_rate_v3', jpyRate);
                 localStorage.setItem('jpy_rate_date_v3', dateKey);
                 updateRateUI(true, dateKey);
-            } catch (e) { 
-                updateRateUI(false); 
-            }
+            } catch (e) { updateRateUI(false); }
         }
 
         function updateRateUI(ok, dateKey) {
@@ -223,8 +213,7 @@
             if (el) {
                 if (ok) {
                     el.innerText = `${dateKey} 匯率: ${jpyRate.toFixed(4)}`;
-                    el.classList.remove('text-slate-400', 'text-orange-400');
-                    el.classList.add('text-blue-500');
+                    el.classList.replace('text-slate-400', 'text-blue-500');
                 } else {
                     el.innerText = "匯率連線失敗";
                     el.classList.add('text-orange-400');
@@ -234,45 +223,35 @@
 
         document.getElementById('payForm').onsubmit = async (e) => {
             e.preventDefault();
-            if (!SCRIPT_URL) { 
-                alert("⚠️ 請先在代碼中填寫 SCRIPT_URL (GAS 部署網址)"); 
-                return; 
-            }
+            if (!SCRIPT_URL) { alert("⚠️ 請先設定 SCRIPT_URL"); return; }
 
             const submitBtn = document.getElementById('submitBtn');
             const btnText = document.getElementById('btnText');
-            
             submitBtn.disabled = true;
             btnText.innerHTML = `<span class="spinner"></span> 處理中...`;
 
             const item = document.getElementById('item').value;
             const amount = parseFloat(document.getElementById('amount').value);
             const currency = document.getElementById('currency').value;
-            const selectedDate = document.getElementById('inputDate').value; // YYYY-MM-DD
+            const selectedDate = document.getElementById('inputDate').value; 
             const twdEstimate = currency === 'JPY' ? Math.round(amount * jpyRate) : amount;
             
-            const tempId = 'temp-' + Date.now();
-            const todayStr = getTaiwanToday();
+            const todayStr = getTaiwanTodayStr();
             
-            // 處理儲存的時間戳記
+            // 核心邏輯：判斷日期並決定時間戳
             let finalTimestamp;
             if (selectedDate === todayStr) {
-                // 如果是今天，記錄當下的實際時間
+                // 今天：記錄當下秒數
                 finalTimestamp = new Date().toISOString();
             } else {
-                // 如果是補錄之前的日期，固定設為該日的 21:00:00 (台北時間)
-                const dateParts = selectedDate.split('-');
-                // 使用台北時間建構，避免時區跑掉
-                const patchDate = new Date(`${selectedDate}T21:00:00+08:00`);
-                finalTimestamp = patchDate.toISOString();
+                // 過去的日期：固定 21:00 (台北時間)
+                // 必須使用 T21:00:00+08:00 強制指定台北時區
+                finalTimestamp = new Date(`${selectedDate}T21:00:00+08:00`).toISOString();
             }
 
             const optimisticItem = {
-                id: tempId, 
-                item, 
-                amount, 
-                currency, 
-                twd: twdEstimate,
+                id: 'temp-' + Date.now(), 
+                item, amount, currency, twd: twdEstimate,
                 date: finalTimestamp, 
                 optimistic: true
             };
@@ -280,10 +259,12 @@
             fullData.unshift(optimisticItem);
             fullData.sort((a, b) => new Date(b.date) - new Date(a.date));
             
-            // 重置表單，但不重置篩選器（以便連續錄入同一天資料時，列表能正確顯示該日期內容）
+            // 重要：為了讓使用者看到補錄的資料，自動調整篩選範圍
+            document.getElementById('startDate').value = selectedDate;
+            document.getElementById('endDate').value = selectedDate;
+
             document.getElementById('item').value = '';
             document.getElementById('amount').value = '';
-            
             render(fullData);
             document.getElementById('item').focus();
 
@@ -291,37 +272,25 @@
                 await fetch(SCRIPT_URL, {
                     method: 'POST',
                     mode: 'no-cors',
-                    headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ 
-                        action: 'ADD', 
-                        item, 
-                        amount, 
-                        currency, 
-                        twd: twdEstimate,
-                        date: finalTimestamp // 傳送帶有 21:00 的時間字串
+                        action: 'ADD', item, amount, currency, twd: twdEstimate, date: finalTimestamp 
                     })
                 });
-                
                 setTimeout(() => {
                     submitBtn.disabled = false;
                     btnText.innerText = '確認儲存';
                     fetchData(); 
                 }, 800);
-
             } catch (error) {
-                console.error("提交失敗", error);
                 submitBtn.disabled = false;
                 btnText.innerText = '確認儲存';
-                alert("網絡異常，紀錄可能未同步到雲端");
+                alert("網路異常，已儲存於本地");
                 fetchData(); 
             }
         };
 
         async function fetchData() {
-            if (!SCRIPT_URL) {
-                render(fullData); 
-                return;
-            }
+            if (!SCRIPT_URL) { render(fullData); return; }
             if (fullData.length === 0) document.body.classList.add('is-loading');
             try {
                 const res = await fetch(SCRIPT_URL);
@@ -331,11 +300,7 @@
                     localStorage.setItem('travel_records_v3', JSON.stringify(fullData));
                     render(fullData);
                 }
-            } catch (e) { 
-                console.error("讀取失敗", e);
-            } finally { 
-                document.body.classList.remove('is-loading'); 
-            }
+            } catch (e) { console.error(e); } finally { document.body.classList.remove('is-loading'); }
         }
 
         function render(items) {
@@ -346,46 +311,41 @@
             const startVal = document.getElementById('startDate').value;
             const endVal = document.getElementById('endDate').value;
             
-            const startTime = startVal ? new Date(startVal + 'T00:00:00').getTime() : 0;
-            const endTime = endVal ? new Date(endVal + 'T23:59:59').getTime() : Infinity;
+            // 轉換篩選時間戳
+            const startTime = startVal ? new Date(startVal + 'T00:00:00+08:00').getTime() : 0;
+            const endTime = endVal ? new Date(endVal + 'T23:59:59+08:00').getTime() : Infinity;
 
             let filteredItems = items.filter(i => {
-                const recordTime = new Date(i.date).getTime();
-                return recordTime >= startTime && recordTime <= endTime;
+                const t = new Date(i.date).getTime();
+                return t >= startTime && t <= endTime;
             });
 
             const totalSum = filteredItems.reduce((sum, i) => sum + (Number(i.twd) || 0), 0);
             totalCountEl.innerText = `共 ${filteredItems.length} 筆消費`;
             totalAmountEl.innerText = `NT$ ${totalSum.toLocaleString()}`;
 
-            if (!filteredItems || filteredItems.length === 0) {
-                listBody.innerHTML = '<tr><td class="p-20 text-center text-slate-300 font-medium italic">此範圍內沒有紀錄</td></tr>';
+            if (filteredItems.length === 0) {
+                listBody.innerHTML = '<tr><td class="p-20 text-center text-slate-300 italic font-medium">此範圍內沒有紀錄</td></tr>';
                 return;
             }
 
             listBody.innerHTML = filteredItems.map(i => `
                 <tr id="row-${i.id}" class="transition-all ${i.optimistic ? 'optimistic-item' : ''}">
                     <td class="px-6 py-5">
-                        <div class="font-bold text-slate-800 text-base leading-tight">${i.item}</div>
-                        <div class="text-[10px] text-slate-400 font-bold tracking-wider mt-1 flex items-center gap-2">
-                            <span>${i.optimistic ? '儲存中...' : formatDate(i.date)}</span>
-                            <span class="bg-slate-100 px-1.5 py-0.5 rounded text-slate-500">
-                                原額: ${Number(i.amount).toLocaleString()} ${i.currency}
-                            </span>
+                        <div class="font-bold text-slate-800 text-base">${i.item}</div>
+                        <div class="text-[10px] text-slate-400 font-bold mt-1 flex items-center gap-2">
+                            <span>${formatDate(i.date)}</span>
+                            <span class="bg-slate-100 px-1.5 py-0.5 rounded text-slate-500">${Number(i.amount).toLocaleString()} ${i.currency}</span>
                         </div>
                     </td>
                     <td class="px-6 py-5 text-right">
-                        <div class="text-blue-600 font-black text-xl leading-none">
-                            <span class="text-[10px] mr-0.5 font-bold">NT$</span>${Math.round(i.twd || 0).toLocaleString()}
+                        <div class="text-blue-600 font-black text-xl">
+                            <span class="text-[10px] mr-0.5">NT$</span>${Math.round(i.twd || 0).toLocaleString()}
                         </div>
                     </td>
                     <td class="px-4 py-5 text-right w-10">
-                        ${i.optimistic ? 
-                            `<div class="w-4 h-4 border-2 border-blue-100 border-t-blue-500 rounded-full animate-spin ml-auto"></div>` : 
-                            `<button onclick="deleteItem('${i.id}')" class="text-slate-200 hover:text-red-400 transition-colors p-2">
-                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path></svg>
-                            </button>`
-                        }
+                        ${i.optimistic ? `<div class="w-4 h-4 border-2 border-blue-100 border-t-blue-500 rounded-full animate-spin ml-auto"></div>` : 
+                        `<button onclick="deleteItem('${i.id}')" class="text-slate-200 hover:text-red-400 p-2"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path></svg></button>`}
                     </td>
                 </tr>
             `).join('');
@@ -400,23 +360,19 @@
                 localStorage.setItem('travel_records_v3', JSON.stringify(fullData));
                 render(fullData);
                 try {
-                    await fetch(SCRIPT_URL, { 
-                        method: 'POST', 
-                        mode: 'no-cors', 
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ action: 'DELETE', id: id }) 
-                    });
-                } catch(e) { 
-                    fetchData(); 
-                }
+                    await fetch(SCRIPT_URL, { method: 'POST', mode: 'no-cors', body: JSON.stringify({ action: 'DELETE', id: id }) });
+                } catch(e) { fetchData(); }
             }, 300);
         }
 
         function formatDate(dStr) {
             const d = new Date(dStr);
             if (isNaN(d)) return dStr;
-            // 顯示格式：月份/日期 小時:分鐘
-            return `${d.getMonth()+1}/${d.getDate()} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+            // 使用台北時區顯示
+            const month = d.toLocaleString('zh-TW', { month: 'numeric', timeZone: 'Asia/Taipei' });
+            const day = d.toLocaleString('zh-TW', { day: 'numeric', timeZone: 'Asia/Taipei' });
+            const time = d.toLocaleString('zh-TW', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Asia/Taipei' });
+            return `${month}/${day} ${time}`;
         }
 
         window.onload = () => { 
