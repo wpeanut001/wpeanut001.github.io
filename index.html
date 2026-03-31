@@ -85,13 +85,14 @@
         // 重要：請務必替換為您部署後的 GAS URL
         const GAS_URL = "https://script.google.com/macros/s/AKfycbyARg5ZDoUF4zQSX9nBVcytl4z8h83CP8hfrPHf70vusnLKCqcaNqagd-smTsiNL9ZP/exec";
         
-        // 本地資料快取
+        // 本地資料快取，讓篩選不需要經過網路
         let rawDataCache = [];
 
-        // 初始化日期
-        const todayStr = new Date().toISOString().split('T')[0];
+        // 初始化日期選擇器為今天
+        const todayStr = new Date().toLocaleDateString('sv-SE'); // 格式 yyyy-mm-dd
         document.getElementById('date').value = todayStr;
         
+        // 初始化篩選器預設範圍 (本月)
         const now = new Date();
         document.getElementById('filterStart').valueAsDate = new Date(now.getFullYear(), now.getMonth(), 1);
         document.getElementById('filterEnd').valueAsDate = now;
@@ -111,19 +112,19 @@
                 return;
             }
 
-            // --- 修正時間邏輯 ---
+            // --- 智慧時間判斷邏輯 ---
             let finalDate;
             const selectedDate = new Date(selectedDateStr);
             const today = new Date();
             
-            // 比較日期 (不計時間)
+            // 比較日期 (忽略具體分秒)
             const isToday = selectedDate.toDateString() === today.toDateString();
             
             if (isToday) {
-                // 如果是今天，使用現在時間
+                // 如果選的是今天，保留現在的時間戳記
                 finalDate = today.toISOString();
             } else {
-                // 如果是補登，設定為當天 21:00 (本地時間)
+                // 如果是補登過去日期，設定為該日晚上 21:00
                 selectedDate.setHours(21, 0, 0, 0);
                 finalDate = selectedDate.toISOString();
             }
@@ -139,17 +140,18 @@
                     mode: 'no-cors',
                     body: JSON.stringify({
                         action: 'add',
-                        date: finalDate, // 傳送 ISO 字串
+                        date: finalDate,
                         item: item,
                         currency: currency,
                         amount: amount
                     })
                 });
 
+                // 清空輸入
                 document.getElementById('item').value = '';
                 document.getElementById('amount').value = '';
                 
-                // 成功後背景刷新資料
+                // 成功後從背景更新資料清單
                 await loadDataFromServer();
                 
             } catch (error) {
@@ -161,7 +163,7 @@
         }
 
         /**
-         * 從 GAS 抓取完整資料並存入快取
+         * 從 GAS 抓取完整資料並存入本地快取 (rawDataCache)
          */
         async function loadDataFromServer() {
             try {
@@ -170,15 +172,15 @@
                     body: JSON.stringify({ action: 'getData' })
                 });
                 rawDataCache = await response.json();
-                applyFilter(); // 抓完後立即更新畫面
+                applyFilter(); // 抓完後立即由本地端進行渲染，無須等待網路
             } catch (e) {
                 document.getElementById('recordContainer').innerHTML = 
-                    '<div class="text-center text-red-400 py-10">資料讀取失敗</div>';
+                    '<div class="text-center text-red-400 py-10">資料讀取失敗，請確認 GAS 網址</div>';
             }
         }
 
         /**
-         * 本地篩選邏輯 (不經由網路，即時反應)
+         * 本地篩選邏輯 (不經由網路，即時反應畫面)
          */
         function applyFilter() {
             const container = document.getElementById('recordContainer');
@@ -190,13 +192,14 @@
                 return;
             }
 
+            // 在本地記憶體進行過濾與排序
             const filtered = rawDataCache.filter(row => {
                 const rowDate = row['日期'].split(' ')[0];
                 return rowDate >= start && rowDate <= end;
             }).sort((a,b) => new Date(b['日期']) - new Date(a['日期']));
 
             if (filtered.length === 0) {
-                container.innerHTML = '<div class="text-center text-gray-400 py-10">區間內無紀錄</div>';
+                container.innerHTML = '<div class="text-center text-gray-400 py-10">所選區間內無紀錄</div>';
                 return;
             }
 
@@ -233,10 +236,10 @@
          * 刪除紀錄
          */
         async function deleteRecord(id) {
-            if (!confirm("確定要刪除嗎？")) return;
+            if (!confirm("確定要刪除這筆紀錄嗎？")) return;
             
             try {
-                // 本地預先移除 (Optimistic UI 更新)，讓使用者感覺變快
+                // Optimistic UI：本地端先移除，讓使用者感覺瞬間刪除
                 rawDataCache = rawDataCache.filter(item => item['ID'] !== id);
                 applyFilter();
 
@@ -246,7 +249,7 @@
                     body: JSON.stringify({ action: 'delete', id: id })
                 });
                 
-                // 背景同步一次確保正確性
+                // 背景同步確認數據正確
                 loadDataFromServer();
             } catch (e) {
                 alert("刪除失敗");
@@ -254,7 +257,7 @@
             }
         }
 
-        // 初始讀取從伺服器抓取
+        // 初次開啟頁面時從伺服器抓取資料
         window.onload = loadDataFromServer;
     </script>
 </body>
